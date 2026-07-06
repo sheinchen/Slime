@@ -1,0 +1,160 @@
+# 史莱姆树洞 · 开发进度日志(Progress Log)
+
+> 本文件记录项目从零到完成的开发进度。每完成一部分功能,在对应位置更新状态与说明。
+> 关联文档:《史莱姆树洞 · 产品需求文档(PRD)》《史莱姆树洞 · 项目执行文档》
+> 定位:一个有主动关怀能力的 AI 情绪陪伴系统,以史莱姆世界为载体(iOS 纯 UIKit + Core Data)。
+
+**状态图例**:⬜ 未开始 · 🟨 进行中 · ✅ 已完成 · ⏸️ 暂缓 · ❌ 本期不做(裁剪)
+
+---
+
+## 一、项目快照
+
+| 项 | 内容 |
+|---|---|
+| 当前阶段 | 阶段一 · 骨架 + 架构地基 |
+| 整体进度 | 切片 1 最小闭环已跑通(输入→存→展示) |
+| 最近更新 | 2026-07-06 |
+| 技术栈 | UIKit(现代写法)+ Core Data + MVVM + Repository + SnapKit |
+| 后端 | 待定(AI 中转 / 定时任务) |
+
+**技术决策(已锁定)**
+- 框架:全 UIKit,不用 SwiftUI
+- 存储:Core Data,不用 SwiftData
+- 架构:MVVM + Repository,逻辑层与 View 分离、可测试
+- 列表:UICollectionView + Compositional Layout + Diffable Data Source
+- 布局:SnapKit
+- 形态:本地为主 + 轻后端
+
+**待确认清单**(阻塞项,需尽早定)
+- ⬜ AI 服务选型(情绪分析 / 摘要)
+- ⬜ 后端选型(藏 key、定时任务、种子内容)
+- ⬜ 真机 / 开发者账号($99/年,后台任务与通知需真机)
+- ⬜ 通知实现方式(本地通知 vs 远程推送)
+- ⬜ 隐私处理(本地是否加密、上传 AI 前是否脱敏)
+- ⬜ 情绪粒度(四类枚举锁死:开心 / 平静 / 难过 / 生气)
+
+---
+
+## 二、里程碑总览
+
+| 阶段 | 周期 | 目标 | 状态 |
+|---|---|---|---|
+| M1 骨架 | 约 3-4 周 | 架构干净、能记录能展示的本地 App | 🟨 进行中 |
+| M2 AI 系统 | 约 4-5 周 | 会主动关心你的 AI 史莱姆树洞(可演示) | ⬜ 未开始 |
+| M3 打磨 | 约 3-4 周 | 流畅、拟人、可扛系统底层追问的完成品 | ⬜ 未开始 |
+
+---
+
+## 三、阶段一:骨架 + 架构地基(M1)
+
+> 目标:打通"写一句话 → 生成一只史莱姆 → 出现在广场"最小闭环。一行 AI 不碰,史莱姆先用纯色圆角矩形代替。
+
+### 3.1 工程与基础设施
+- ✅ 新建 Xcode 工程,配好 Git(已有初始 commit)
+- ✅ 移除 Storyboard,改为代码驱动的 SceneDelegate 启动(window + UINavigationController)
+- ✅ 引入 SnapKit(SPM,6.0)
+- 🟨 工程分层目录:文件已按 View / ViewController / ViewModel / Repository / Model 职责拆分,物理分组待整理(Post 子类文件暂在根目录)
+
+### 3.2 数据层(Core Data)
+- 🟨 设计数据模型:Post(id/content/createdAt,均非可选)已建;Slime Entity 暂未建(切片 1 用占位方块)
+- ⬜ 定义情绪枚举(开心 / 平静 / 难过 / 生气)——留待接 AI 的切片
+- ✅ 搭建 Core Data 栈(CoreDataStack 单例,NSPersistentContainer / viewContext,从 AppDelegate 抽出)
+- ✅ Repository 封装:协议 PostRepository + CoreDataPostRepository 实现(create / fetchAll,init 注入 context)
+- ✅ 数据持久化验证(冒烟测试 + 重启后仍在)
+
+### 3.3 记录碎碎念(P0)
+- ✅ 生成页 ComposeViewController:文本输入界面(UITextView + 占位,无强制字数 / 标题)
+- ✅ 提交后经 ComposeViewModel → Repository 写入 Core Data
+- ✅ ViewModel 承接输入与保存逻辑(去空白、空不存;不 import UIKit)
+
+### 3.4 史莱姆广场雏形(P0)
+- ✅ UICollectionView + Compositional Layout + Diffable Data Source 展示(CellRegistration,SlimeItem 值类型驱动)
+- ✅ 史莱姆用纯色圆角矩形占位(SlimeCell,按 id 稳定取情绪色板;暂不接 AI、暂不做动效)
+- ⬜ 点击史莱姆 → 查看原帖内容(详情页)
+- 🟨 广场与生成页的基本转场(已有 push 导航,"走进广场"动画留后)
+
+**里程碑验收**:全新安装后无需登录,输入文字 → 保存 → 广场显示 → 点击回看,数据流通畅。
+
+---
+
+## 四、阶段二:AI 主动系统(M2)
+
+> 核心亮点。情绪打标签、规则引擎、Agent 决策、聊天、孵化揭晓。
+
+### 4.1 AI 情绪分析 + 摘要(P0)
+- ⬜ 一次结构化输出(JSON):摘要 + 情绪 + 是否含心愿 + 心愿时间 + 话题分类
+- ⬜ async/await 后台调用,不阻塞 UI(@MainActor 回主线程)
+- ⬜ 异常兜底(网络失败等)
+- ⬜ 情绪标签持久化到 Post
+
+### 4.2 生成史莱姆 · 孵化揭晓(P0)
+- ⬜ 乐观 UI:先放灰色未定形占位史莱姆
+- ⬜ 分析返回后揭晓颜色 + 表情 + wobble 动画
+- ⬜ 样貌多维度:颜色(情绪)、表情(细分)、大小(长度/重要度)
+- ⬜ 揭晓动画短(<1s)、可跳过;高频记录降级为轻量弹出
+- ⬜ 新史莱姆"走进广场"转场
+
+### 4.3 史莱姆广场 · 动态化(P0)
+- ⬜ 情绪驱动动效(开心蹦跳 / 难过扁塌挪动等)
+- ⬜ squash & stretch(transform 位移 + scale)
+- ⬜ 四维度区分 + 日期标签兜底
+
+### 4.4 主动式 Agent 系统(P1 · 架构核心)
+- ⬜ 统一管道:Event → Rule → Trigger → Agent 决策 → Action
+- ⬜ Rule:连续 N 篇消极 → 主动关心
+- ⬜ 频率控制(如同周不重复)
+- ⬜ Agent 决定语气与内容
+
+### 4.5 AI 主动关心 + 聊天模式(P1)
+- ⬜ 触发后 AI 史莱姆柔和询问"要不要聊聊"
+- ⬜ 进入聊天模式对话
+- ⬜ AI 始终以史莱姆身份出现(透明,不假装真人)
+
+### 4.6 心愿 / 时间点提醒(P1)
+- ⬜ 从结构化输出识别心愿 / 时间点
+- ⬜ 到期由 AI 史莱姆主动提起
+
+### 4.7 帖子久无回应的 AI 回应(P1)
+- ⬜ 超时无回应 → AI 拟人回应(身份透明)
+
+**里程碑验收**:满足触发条件可靠触达、频率受控、聊天连贯温暖,可录屏演示。
+
+---
+
+## 五、阶段三:系统底层 + 打磨(M3)
+
+- ⬜ BGTaskScheduler 后台任务(App 未打开也能提醒)
+- ⬜ actor 保证多规则并发线程安全
+- ⬜ 广场性能:UIView 掉帧拐点评估,必要时迁移 SpriteKit
+- ⬜ 列表 / 广场内存优化
+- ⬜ 拟人动效细节打磨(真机调手感)
+- ⬜ 单元测试(逻辑层)
+- ⬜ 隐私与本地数据安全策略落地
+
+**里程碑验收**:流畅、拟人,能扛住系统底层与架构的连续追问。
+
+---
+
+## 六、本期裁剪(Out of Scope)
+
+- ❌ 登录 / 账号体系(与"他人回复"同期引入)
+- ❌ 回复他人日记 / 社区功能
+- ❌ 挑战与奖励 / 游戏化(史莱姆进化 / 喂养)
+- ❌ 多设备数据同步
+
+---
+
+## 七、开发日志(时间倒序)
+
+> 每完成一个切片,在此追加一条:日期 · 做了什么 · 遇到的坑 / AI 协作记录(面试素材)。
+
+### 2026-07-06
+- **切片 1 最小闭环打通**:输入一句话 → 存 Core Data → 广场展示为纯色圆角方块,端到端跑通,重启数据仍在,一行 AI 未接。
+- 分层落地:Post 实体(Codegen=Manual 手写子类)/ CoreDataStack(单例,从 AppDelegate 抽栈)/ PostRepository(协议+实现,注入 context)/ ComposeVM / SquareVM(不碰 UIKit,注入 Repository)/ SlimeItem(值类型 Hashable)/ Compose + Square VC / SlimeCell。
+- 现代 UIKit:代码驱动启动去 Storyboard;广场用 Compositional Layout + Diffable Data Source + CellRegistration。
+- 引入 SnapKit 6.0(SPM)。
+- AI 协作记录(面试素材):数据模型 Optional 未取消导致模型与 Swift 非可选不一致的坑、误加 fetchedProperty、`context,save()` 拼写、`CoreDaraPostRepository` 拼写——都在 review 时逐一发现纠正;核心层(Core Data 栈 / Repository / ViewModel)坚持手敲,UI 与样板由 AI 生成。
+
+### 2026-07-04
+- 建立本 progress 日志,固化项目背景、里程碑与任务清单。项目处于初始化状态,尚无功能代码。
