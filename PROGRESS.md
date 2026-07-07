@@ -71,7 +71,7 @@
 ### 3.4 史莱姆广场雏形(P0)
 - ✅ UICollectionView + Compositional Layout + Diffable Data Source 展示(CellRegistration,SlimeItem 值类型驱动)
 - ✅ 史莱姆用纯色圆角矩形占位(SlimeCell,按 id 稳定取情绪色板;暂不接 AI、暂不做动效)
-- ⬜ 点击史莱姆 → 查看原帖内容(详情页)
+- ✅ 点击史莱姆 → 查看原帖内容(详情页 PostDetailVC + PostDetailVM;didSelect → itemIdentifier 取值 → push)
 - 🟨 广场与生成页的基本转场(已有 push 导航,"走进广场"动画留后)
 
 **里程碑验收**:全新安装后无需登录,输入文字 → 保存 → 广场显示 → 点击回看,数据流通畅。
@@ -148,6 +148,12 @@
 ## 七、开发日志(时间倒序)
 
 > 每完成一个切片,在此追加一条:日期 · 做了什么 · 遇到的坑 / AI 协作记录(面试素材)。
+
+### 2026-07-07
+- **切片 2:点击史莱姆 → 详情页**。广场 `didSelectItemAt` → `dataSource.itemIdentifier(for:)` 安全取出 SlimeItem → 注入 `PostDetailViewModel` → push `PostDetailViewController`(只读展示正文+格式化日期,不重新查库)。
+- 详情 VM 承担展示逻辑(日期格式化),VC 只 bind 现成字符串。
+- 复用性验证(面试点):选中→取数据→push 详情 这套逻辑,以后广场换 SpriteKit 场景时不用改,只换"点击检测"入口。
+- 工程整理:源码按 Models / Repositories / ViewModels / ViewControllers / Views 五层分组归位,Post 子类文件从根目录移入 Models。
 
 ### 2026-07-06
 - **切片 1 最小闭环打通**:输入一句话 → 存 Core Data → 广场展示为纯色圆角方块,端到端跑通,重启数据仍在,一行 AI 未接。

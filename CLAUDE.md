@@ -85,10 +85,11 @@
     - UI 层:代码驱动启动(SceneDelegate 建 window + UINavigationController,已去 Storyboard)、`ComposeViewController`(SnapKit)、`SquareViewController`(Compositional Layout + Diffable Data Source + CellRegistration)、`SlimeCell`。
     - 逻辑层:`ComposeViewModel` / `SquareViewModel`(不 import UIKit,依赖注入 Repository);`SlimeItem`(值类型 Hashable 展示模型,Post→SlimeItem 转换解耦)。
     - 依赖:SnapKit 6.0(SPM)。
+  - **切片 2(点击详情)✅**:广场点方块 → `didSelectItemAt` → `dataSource.itemIdentifier(for:)` 取 SlimeItem → 注入 `PostDetailViewModel` → push `PostDetailViewController`(只读展示正文+日期)。源码已按五层目录(Models/Repositories/ViewModels/ViewControllers/Views)归位。
 - **正在做**:
-  - (切片 1 已完,切片 2 待定)
+  - (切片 2 已完,切片 3 待定)
 - **下一步(待做)**:
-  - 切片 2:待定(建议:把占位方块换成真正的史莱姆 view / 或接入情绪分析生成史莱姆)。可选补强:点击方块看原帖详情、空广场占位提示。
+  - 切片 3 候选:删除史莱姆(补全 CRUD,diffable 动画移除)/ 把占位方块换成真正的史莱姆 view / 空广场占位提示 / 接入 AI 情绪分析(需先定 AI 服务选型)。
 - **关键待确认项**(来自 PRD,做到相关切片再定):
   - AI 服务选型、后端选型、真机/开发者账号、通知实现方式、隐私处理、情绪枚举锁定
 

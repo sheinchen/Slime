@@ -48,6 +48,7 @@ final class SquareViewController: UIViewController {
     private func setupCollectionView() {
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
         collectionView.backgroundColor = .clear
+        collectionView.delegate = self   // 让本类接收点击事件
         view.addSubview(collectionView)
         // 这里没用 SnapKit,直接让 collectionView 铺满,顺便示范一下等价的原生写法
         collectionView.translatesAutoresizingMaskIntoConstraints = false
@@ -105,5 +106,26 @@ final class SquareViewController: UIViewController {
         snapshot.appendSections([.main])
         snapshot.appendItems(viewModel.items, toSection: .main)
         dataSource.apply(snapshot, animatingDifferences: true)
+    }
+}
+
+// MARK: - UICollectionViewDelegate
+
+extension SquareViewController: UICollectionViewDelegate {
+
+    // 点中某个格子时调用。indexPath 告诉你点的是第几个。
+    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
+        // 取消选中高亮(纯视觉)
+        collectionView.deselectItem(at: indexPath, animated: true)
+
+        // 关键:不用 indexPath 去数组里 [下标] 取数据,而是问 dataSource 要 item。
+        // 这样即使数据正在变动也不会取错/越界 —— 这是 Diffable 的正确取值姿势。
+        guard let item = dataSource.itemIdentifier(for: indexPath) else { return }
+
+        // 造详情页的 ViewModel(把这条数据注入),再 push。换成 SpriteKit 场景后,
+        // 变的只有"怎么知道点了哪只",下面这两行完全一样。
+        let detailVM = PostDetailViewModel(item: item)
+        let detailVC = PostDetailViewController(viewModel: detailVM)
+        navigationController?.pushViewController(detailVC, animated: true)
     }
 }
