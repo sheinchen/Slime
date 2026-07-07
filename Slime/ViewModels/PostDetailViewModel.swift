@@ -10,9 +10,11 @@ import Foundation
 final class PostDetailViewModel {
     
     private let item: SlimeItem
+    private let repository: PostRepository
     
-    init(item: SlimeItem) {
+    init(item: SlimeItem, repository: PostRepository = CoreDataPostRepository()) {
         self.item = item
+        self.repository = repository
     }
     
     var contentText: String {
@@ -21,6 +23,10 @@ final class PostDetailViewModel {
     
     var dateText: String {
         Self.formatter.string(from: item.createdAt)
+    }
+    
+    func delete() {
+        repository.delete(id: item.id)
     }
     
     private static let formatter: DateFormatter = {

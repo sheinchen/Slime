@@ -128,4 +128,31 @@ extension SquareViewController: UICollectionViewDelegate {
         let detailVC = PostDetailViewController(viewModel: detailVM)
         navigationController?.pushViewController(detailVC, animated: true)
     }
+
+    // 长按某个格子时,返回一个上下文菜单(iOS 会自动做放大预览 + 弹菜单)
+    func collectionView(
+        _ collectionView: UICollectionView,
+        contextMenuConfigurationForItemAt indexPath: IndexPath,
+        point: CGPoint
+    ) -> UIContextMenuConfiguration? {
+        guard let item = dataSource.itemIdentifier(for: indexPath) else { return nil }
+
+        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
+            // 一个"删除"动作:红色破坏性样式 + 垃圾桶图标
+            let delete = UIAction(
+                title: "删除",
+                image: UIImage(systemName: "trash"),
+                attributes: .destructive
+            ) { _ in
+                self?.deleteItem(item)
+            }
+            return UIMenu(children: [delete])
+        }
+    }
+
+    // 执行删除:VM 删数据,再刷新快照让 diffable 播移除动画
+    private func deleteItem(_ item: SlimeItem) {
+        viewModel.delete(item)
+        applySnapshot()
+    }
 }

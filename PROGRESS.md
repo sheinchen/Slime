@@ -60,7 +60,7 @@
 - 🟨 设计数据模型:Post(id/content/createdAt,均非可选)已建;Slime Entity 暂未建(切片 1 用占位方块)
 - ⬜ 定义情绪枚举(开心 / 平静 / 难过 / 生气)——留待接 AI 的切片
 - ✅ 搭建 Core Data 栈(CoreDataStack 单例,NSPersistentContainer / viewContext,从 AppDelegate 抽出)
-- ✅ Repository 封装:协议 PostRepository + CoreDataPostRepository 实现(create / fetchAll,init 注入 context)
+- ✅ Repository 封装:协议 PostRepository + CoreDataPostRepository 实现(create / fetchAll / delete(id:),init 注入 context;delete 用 NSPredicate 按 id 查后 context.delete)
 - ✅ 数据持久化验证(冒烟测试 + 重启后仍在)
 
 ### 3.3 记录碎碎念(P0)
@@ -148,6 +148,13 @@
 ## 七、开发日志(时间倒序)
 
 > 每完成一个切片,在此追加一条:日期 · 做了什么 · 遇到的坑 / AI 协作记录(面试素材)。
+
+### 2026-07-07(切片 3)
+- **切片 3:删除史莱姆(补全 CRUD 的 D)**。两个入口都通同一条 `VM → Repository.delete(id:) → context.delete + save`:
+  - 广场:长按方块 → `UIContextMenuConfiguration` 菜单 → 删除 → `SquareViewModel.delete` 删库并同步 items → applySnapshot 播 diffable 移除动画。
+  - 详情页:右上角垃圾桶 → `UIAlertController` 确认框 → `PostDetailViewModel.delete()` 删库 → pop 返回。
+- 架构点:详情页删完不写回调,靠广场 `viewWillAppear` 重读自动同步;若广场非每次重读才需 delegate/闭包通知——这个取舍是面试料。
+- 新概念:NSPredicate(按 id 过滤)、context.delete、UIContextMenuConfiguration、UIAlertController、闭包 [weak self] 防循环引用。
 
 ### 2026-07-07
 - **切片 2:点击史莱姆 → 详情页**。广场 `didSelectItemAt` → `dataSource.itemIdentifier(for:)` 安全取出 SlimeItem → 注入 `PostDetailViewModel` → push `PostDetailViewController`(只读展示正文+格式化日期,不重新查库)。

@@ -52,11 +52,38 @@ final class PostDetailViewController: UIViewController {
         super.viewDidLoad()
         title = "详情"
         view.backgroundColor = .systemBackground
+        setupNavigationBar()
         setupUI()
         bind()   // 把 ViewModel 的数据灌进控件
     }
 
     // MARK: - 私有
+
+    private func setupNavigationBar() {
+        // 右上角放一个红色垃圾桶按钮
+        navigationItem.rightBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .trash,
+            target: self,
+            action: #selector(deleteTapped)
+        )
+        navigationItem.rightBarButtonItem?.tintColor = .systemRed
+    }
+
+    // 点删除:先弹确认框(破坏性操作的防护),确认后才真删
+    @objc private func deleteTapped() {
+        let alert = UIAlertController(
+            title: "删除这只史莱姆?",
+            message: "删除后无法恢复。",
+            preferredStyle: .alert
+        )
+        alert.addAction(UIAlertAction(title: "取消", style: .cancel))
+        alert.addAction(UIAlertAction(title: "删除", style: .destructive) { [weak self] _ in
+            self?.viewModel.delete()                       // VM 删库
+            self?.navigationController?.popViewController(animated: true)  // 返回广场
+            // 返回后广场 viewWillAppear 会重读,自动少掉这只 —— 不需要额外通知
+        })
+        present(alert, animated: true)
+    }
 
     private func setupUI() {
         view.addSubview(dateLabel)

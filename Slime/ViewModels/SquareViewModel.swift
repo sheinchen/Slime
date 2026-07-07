@@ -22,4 +22,9 @@ final class SquareViewModel {
             SlimeItem(id: post.id, content: post.content, createdAt: post.createdAt)
         })
     }
+    
+    func delete(_ item: SlimeItem) {
+        repository.delete(id: item.id)
+        items.removeAll { $0.id == item.id }
+    }
 }

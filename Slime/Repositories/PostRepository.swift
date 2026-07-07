@@ -11,6 +11,7 @@ protocol PostRepository {
     @discardableResult
     func create(content: String) -> Post
     func fetchAll() -> [Post]
+    func delete(id: UUID)
 }
 
 final class CoreDataPostRepository: PostRepository {
@@ -42,6 +43,18 @@ final class CoreDataPostRepository: PostRepository {
         } catch {
             print("查询失败： \(error)")
             return []
+        }
+    }
+    
+    func delete(id: UUID) {
+        let request = Post.fetchRequest()
+        
+        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        request.fetchLimit = 1
+        
+        if let post = try? context.fetch(request).first {
+            context.delete(post)
+            saveIfNeeded()
         }
     }
     
