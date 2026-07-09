@@ -52,6 +52,11 @@ final class SlimeCell: UICollectionViewCell {
         dateLabel.text = Self.dateFormatter.string(from: item.createdAt)
     }
 
+    /// 播放点击 Q 弹反馈(转发给内部 SlimeView,不暴露 slimeView 本身)
+    func playTapFeedback() {
+        slimeView.perform(.tapBounce)
+    }
+
     private static let dateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.dateFormat = "MM-dd HH:mm"

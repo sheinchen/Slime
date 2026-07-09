@@ -122,11 +122,18 @@ extension SquareViewController: UICollectionViewDelegate {
         // 这样即使数据正在变动也不会取错/越界 —— 这是 Diffable 的正确取值姿势。
         guard let item = dataSource.itemIdentifier(for: indexPath) else { return }
 
-        // 造详情页的 ViewModel(把这条数据注入),再 push。换成 SpriteKit 场景后,
-        // 变的只有"怎么知道点了哪只",下面这两行完全一样。
-        let detailVM = PostDetailViewModel(item: item)
-        let detailVC = PostDetailViewController(viewModel: detailVM)
-        navigationController?.pushViewController(detailVC, animated: true)
+        // 先给被点的史莱姆一个 Q 弹反馈
+        if let cell = collectionView.cellForItem(at: indexPath) as? SlimeCell {
+            cell.playTapFeedback()
+        }
+
+        // 稍等一下,让"按下去"的反馈看得见,再进详情。
+        // asyncAfter:延迟一小段时间后在主线程执行闭包。
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) { [weak self] in
+            let detailVM = PostDetailViewModel(item: item)
+            let detailVC = PostDetailViewController(viewModel: detailVM)
+            self?.navigationController?.pushViewController(detailVC, animated: true)
+        }
     }
 
     // 长按某个格子时,返回一个上下文菜单(iOS 会自动做放大预览 + 弹菜单)

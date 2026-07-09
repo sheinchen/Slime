@@ -8,7 +8,13 @@
 import Foundation
 import UIKit
 
+enum SlimeAction {
+    case tapBounce
+}
+
 final class SlimeView: UIView {
+    
+    private let breathingKey = "breathing"
     
     var emotion: SlimeEmotion = .happy {
         didSet {setNeedsLayout()}
@@ -75,6 +81,72 @@ final class SlimeView: UIView {
         mouthLayer.path = shape.mouthPath(in: drawRect, emotion: emotion).cgPath
         mouthLayer.lineWidth = max(1.5, bounds.width * 0.03)
         
+        CATransaction.commit()
+    }
+    
+    //MARK: 呼吸感
+    func startBreathing() {
+        guard layer.animation(forKey: breathingKey) == nil else { return }
+        let anim  = CASpringAnimation(keyPath: "transform.scale")
+        anim.fromValue = 1.0
+        anim.toValue = 1.03
+        anim.mass = 1.0
+        anim.stiffness = 60
+        anim.damping = 12
+        anim.initialVelocity = 0
+        anim.duration = anim.settlingDuration
+        anim.autoreverses = true
+        anim.repeatCount = .infinity
+        anim.isRemovedOnCompletion = false
+        
+        anim.beginTime = CACurrentMediaTime() - Double.random(in: 0 ..< anim.settlingDuration)
+        
+        layer.add(anim, forKey: breathingKey)
+    }
+    
+    func stopBreathing() {
+        layer.removeAnimation(forKey: breathingKey)
+    }
+    
+    // MARK: - 出现/离屏时自动启停
+    override func didMoveToWindow() {
+         super.didMoveToWindow()
+        if window != nil {
+            startBreathing()
+        } else {
+            stopBreathing()
+        }
+    }
+    
+    //MARK: 点击回弹
+    func perform(_ action: SlimeAction) {
+        switch action {
+        case .tapBounce:
+            playTapBounce()
+        }
+    }
+    
+    private func playTapBounce() {
+        stopBreathing()
+        //回弹动画
+        let anim = CAKeyframeAnimation(keyPath: "transform")
+        anim.values = [
+            CATransform3DIdentity,
+            CATransform3DMakeScale(1.12, 0.88, 1),
+            CATransform3DMakeScale(0.94, 1.10, 1),
+            CATransform3DMakeScale(1.03, 0.98, 1),
+            CATransform3DIdentity,
+        ].map { NSValue(caTransform3D: $0) }
+        anim.keyTimes = [0,0.18,0.5,0.78,1.0]
+        anim.duration = 0.42
+        anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        
+        //动画结束恢复呼吸
+        CATransaction.begin()
+        CATransaction.setCompletionBlock { [weak self] in
+            self?.startBreathing()
+        }
+        layer.add(anim, forKey: "tapBounce")
         CATransaction.commit()
     }
 }
