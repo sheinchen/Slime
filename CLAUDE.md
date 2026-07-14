@@ -87,10 +87,11 @@
     - 依赖:SnapKit 6.0(SPM)。
   - **切片 2(点击详情)✅**:广场点方块 → `didSelectItemAt` → `dataSource.itemIdentifier(for:)` 取 SlimeItem → 注入 `PostDetailViewModel` → push `PostDetailViewController`(只读展示正文+日期)。源码已按五层目录(Models/Repositories/ViewModels/ViewControllers/Views)归位。
   - **切片 3(删除)✅**:补全 CRUD 的 D。`PostRepository.delete(id:)`(NSPredicate 按 id 查 + context.delete)。两个入口:广场长按 `UIContextMenuConfiguration` 菜单删除(diffable 动画移除)、详情页垃圾桶 + `UIAlertController` 确认后删并 pop。详情删完靠广场 `viewWillAppear` 重读自动同步,无回调。
+  - **切片 4(史莱姆 view + 动效)✅**:纯色方块换成独立可复用的 `SlimeView` 组件,广场 cell 嵌入。三步各自 commit:①`UIBezierPath` 画粗糙果冻 blob(身体四段三次贝塞尔+两点眼+弧线嘴,坐标在 100×100 参考系再缩放适配任意尺寸);画法抽成 `SlimeShapeProviding` 协议(`BlobSlimeShape` 默认实现),与结构解耦。②`CASpringAnimation` 弹簧呼吸待机(autoreverse+无限循环,`didMoveToWindow` 上屏/离屏自动启停,beginTime 错相位)。③点击 `CAKeyframeAnimation` squash&stretch Q 弹,`CATransaction` completion 恢复呼吸,再延迟 push 详情。预留接口:`SlimeEmotion`(4 情绪)、`SlimeSpecialState`(彩虹态)、`perform(_:SlimeAction)` 一次性动作 —— 本切片只实现默认情绪 + tapBounce。SlimeView 不感知外部数据。
 - **正在做**:
-  - (切片 3 已完,切片 4 待定)
+  - (切片 4 已完,切片 5 待定)
 - **下一步(待做)**:
-  - 切片 4 候选:把占位方块换成真正的史莱姆 view / 空广场占位提示 / 接入 AI 情绪分析(需先定 AI 服务选型)。
+  - 切片 5 候选:空广场占位提示 / 情绪驱动史莱姆(颜色+表情+形变,需先接 AI 情绪分析、定 AI 服务选型)/ 孵化揭晓页(复用放大版 SlimeView + 揭晓动画)。
 - **关键待确认项**(来自 PRD,做到相关切片再定):
   - AI 服务选型、后端选型、真机/开发者账号、通知实现方式、隐私处理、情绪枚举锁定
 

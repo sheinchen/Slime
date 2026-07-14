@@ -47,8 +47,8 @@ final class SlimeCell: UICollectionViewCell {
 
     /// 把一条展示数据灌进 cell。Diffable 会在需要时替我们调用它。
     func configure(with item: SlimeItem) {
-        // 本切片只用默认情绪;以后这里根据 item 的情绪设置 slimeView.emotion
-        slimeView.emotion = .happy
+        // 按这条帖子存下来的情绪给史莱姆上色(情绪目前是生成时随机的,以后由 AI 决定)
+        slimeView.emotion = item.emotion
         dateLabel.text = Self.dateFormatter.string(from: item.createdAt)
     }
 

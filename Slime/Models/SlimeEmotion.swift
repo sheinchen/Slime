@@ -7,11 +7,15 @@
 
 import Foundation
 
-enum SlimeEmotion {
+enum SlimeEmotion: String {
     case happy
     case calm
     case sad
     case angry
+    
+    static func random() -> SlimeEmotion {
+        [.happy, .calm, .sad, .angry].randomElement()!
+    }
 }
 
 enum SlimeSpecialState {

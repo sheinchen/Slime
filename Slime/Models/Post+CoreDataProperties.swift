@@ -21,7 +21,8 @@ extension Post {
     @NSManaged public var content: String
     @NSManaged public var createdAt: Date
     @NSManaged public var id: UUID
-
+    @NSManaged public var emotion: String
+    
 }
 
 extension Post : Identifiable {

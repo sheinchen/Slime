@@ -9,7 +9,7 @@ import CoreData
 
 protocol PostRepository {
     @discardableResult
-    func create(content: String) -> Post
+    func create(content: String, emotion: SlimeEmotion) -> Post
     func fetchAll() -> [Post]
     func delete(id: UUID)
 }
@@ -24,11 +24,12 @@ final class CoreDataPostRepository: PostRepository {
     }
     
     @discardableResult
-    func create(content: String) -> Post {
+    func create(content: String, emotion: SlimeEmotion) -> Post {
         let post = Post(context: context)
         post.id = UUID()
         post.content = content
         post.createdAt = Date()
+        post.emotion = emotion.rawValue
         saveIfNeeded() //落盘
         return post
     }

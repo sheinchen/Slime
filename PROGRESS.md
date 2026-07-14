@@ -96,9 +96,9 @@
 - ⬜ 新史莱姆"走进广场"转场
 
 ### 4.3 史莱姆广场 · 动态化(P0)
-- ⬜ 情绪驱动动效(开心蹦跳 / 难过扁塌挪动等)
-- ⬜ squash & stretch(transform 位移 + scale)
-- ⬜ 四维度区分 + 日期标签兜底
+- 🟨 情绪驱动动效(开心蹦跳 / 难过扁塌挪动等)——已有通用动效骨架(呼吸+Q弹),按情绪区分留待接 AI
+- ✅ squash & stretch(切片 4:呼吸 CASpringAnimation + 点击 Q 弹 CAKeyframeAnimation transform scale)
+- ⬜ 四维度区分 + 日期标签兜底(目前仅日期;颜色/表情/大小待情绪驱动)
 
 ### 4.4 主动式 Agent 系统(P1 · 架构核心)
 - ⬜ 统一管道:Event → Rule → Trigger → Agent 决策 → Action
@@ -148,6 +148,15 @@
 ## 七、开发日志(时间倒序)
 
 > 每完成一个切片,在此追加一条:日期 · 做了什么 · 遇到的坑 / AI 协作记录(面试素材)。
+
+### 2026-07-08(切片 4)
+- **切片 4:纯色方块 → 可复用 SlimeView 组件(纯代码绘制 + 原生动效)**。三步各自 commit:
+  - ① `UIBezierPath` 画粗糙果冻 blob(身体=四段三次贝塞尔,+两点眼+弧线嘴);坐标写在 100×100 参考系,用 `CGAffineTransform` 缩放适配任意尺寸;画法抽成 `SlimeShapeProviding` 协议 + `BlobSlimeShape` 实现,与 SlimeView 结构解耦。
+  - ② `CASpringAnimation` 弹簧呼吸待机(autoreverse + 无限循环;`didMoveToWindow` 上屏/离屏自动启停省性能;beginTime 错相位防同步)。
+  - ③ 点击 `CAKeyframeAnimation` squash&stretch Q 弹(压扁→过冲→回抖),`CATransaction` completionBlock 结束后恢复呼吸;广场先弹 0.18s 再 push 详情。
+- 预留接口(本切片不实现差异):`SlimeEmotion`(开心/平静/难过/生气)、`SlimeSpecialState`(彩虹)、`perform(_:SlimeAction)` 一次性动作。SlimeView 不感知外部数据,只按情绪/状态/指令表现。
+- 新概念:贝塞尔曲线(锚点+控制点)、CAShapeLayer(可动画 path)、CASpringAnimation(mass/stiffness/damping,欠阻尼=回弹)、CAKeyframeAnimation(values+keyTimes)、CATransaction、didMoveToWindow、CATransform3DMakeScale。
+- 技术路线锁定:纯代码路径绘制(为以后形状实时变形),不用图片/SVG/Lottie。
 
 ### 2026-07-07(切片 3)
 - **切片 3:删除史莱姆(补全 CRUD 的 D)**。两个入口都通同一条 `VM → Repository.delete(id:) → context.delete + save`:

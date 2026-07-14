@@ -19,7 +19,7 @@ final class SquareViewModel {
     
     func loadPosts() {
         items = repository.fetchAll().map({ post in
-            SlimeItem(id: post.id, content: post.content, createdAt: post.createdAt)
+            SlimeItem(id: post.id, content: post.content, createdAt: post.createdAt, emotion: SlimeEmotion(rawValue: post.emotion) ?? .calm)
         })
     }
     
