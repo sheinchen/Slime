@@ -161,10 +161,12 @@ final class SlimeView: UIView {
     //MARK: 情绪颜色映射
     static func bodyColor(for emotion: SlimeEmotion) -> UIColor {
         switch emotion {
-        case .happy: return UIColor(red: 1.00, green: 0.84, blue: 0.35, alpha: 1) //黄
-        case .calm:  return UIColor(red: 0.56, green: 0.82, blue: 0.55, alpha: 1)  // 绿
-        case .sad:   return UIColor(red: 0.50, green: 0.70, blue: 0.95, alpha: 1)  // 蓝
-        case .angry: return UIColor(red: 1.00, green: 0.60, blue: 0.35, alpha: 1)  // 橙
+        case .happy:   return UIColor(red: 1.00, green: 0.84, blue: 0.35, alpha: 1)  // 黄
+        case .calm:    return UIColor(red: 0.56, green: 0.82, blue: 0.55, alpha: 1)  // 绿
+        case .sad:     return UIColor(red: 0.50, green: 0.70, blue: 0.95, alpha: 1)  // 蓝
+        case .angry:   return UIColor(red: 1.00, green: 0.60, blue: 0.35, alpha: 1)  // 橙
+        case .anxious: return UIColor(red: 0.72, green: 0.62, blue: 0.90, alpha: 1)  // 紫(焦虑)
+        case .tired:   return UIColor(red: 0.67, green: 0.60, blue: 0.52, alpha: 1)  // 灰褐 taupe(疲惫,暖调以区别于未定形的纯灰)
         }
     }
     
@@ -180,11 +182,13 @@ final class SlimeView: UIView {
         CATransaction.commit()
     }
     
-    func hatch(completion: (() -> Void)? = nil) {
+    /// 开始孵化:未定形(灰、无脸、很小)→ 凝结弹簧放大 → 灰史莱姆轻轻待机(等 AI 结果)。
+    /// 拆成两段是为了让"凝结"盖住网络延迟:先播这段,AI 一回来再调 reveal 揭晓。
+    func beginHatching() {
         stopBreathing()
         setUndefined(true)
-        
-        //阶段一：凝结 0.3弹簧放到到1.0
+
+        // 凝结:从 0.3 弹簧放大到 1.0
         let grow = CASpringAnimation(keyPath: "transform.scale")
         grow.fromValue = 0.3
         grow.toValue = 1.0
@@ -192,54 +196,67 @@ final class SlimeView: UIView {
         grow.stiffness = 90
         grow.damping = 13
         grow.initialVelocity = 0
-        grow.duration  = grow.settlingDuration
-        
+        grow.duration = grow.settlingDuration
+
         CATransaction.begin()
         CATransaction.setCompletionBlock { [weak self] in
-            self?.reveal(completion: completion) //凝结完揭晓
+            self?.startBreathing()   // 凝结完先待机呼吸(还是灰的),等揭晓
         }
         layer.add(grow, forKey: "hatchGrow")
         CATransaction.commit()
     }
-    
-    private func reveal(completion: (() -> Void)?) {
-        setUndefined(false)
-        
+
+    /// 揭晓:定下情绪 → 灰渐变成情绪色 + 五官淡入 + 抖一下 → 回调。AI 结果回来后调用。
+    func reveal(to emotion: SlimeEmotion, completion: (() -> Void)? = nil) {
+        stopBreathing()
+
+        // 1) 先无动画地设好状态:情绪已定,但外观仍压成"未定形"(灰、无脸)作为动画起点
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        self.emotion = emotion                                   // didSet 会设色,但这里被禁掉隐式动画
+        bodyLayer.fillColor = Self.undefinedColor.cgColor        // 起点压回灰
+        [leftEyeLayer, rightEyeLayer, mouthLayer].forEach { $0.opacity = 0 }
+        CATransaction.commit()
+
+        // 2) 用动画走到最终态
         CATransaction.begin()
         CATransaction.setCompletionBlock { [weak self] in
             self?.startBreathing()
             completion?()
         }
-        
-        //揭晓变色
+
+        let targetColor = Self.bodyColor(for: emotion)
+
+        // 变色:灰 → 情绪色
         let color = CABasicAnimation(keyPath: "fillColor")
         color.fromValue = Self.undefinedColor.cgColor
-        color.toValue = Self.bodyColor(for: emotion).cgColor
+        color.toValue = targetColor.cgColor
         color.duration = 0.4
+        bodyLayer.fillColor = targetColor.cgColor                // 模型终点
         bodyLayer.add(color, forKey: "revealColor")
-        
-        //五官淡入
+
+        // 五官淡入
         let fade = CABasicAnimation(keyPath: "opacity")
         fade.fromValue = 0
         fade.toValue = 1
         fade.duration = 0.4
         [leftEyeLayer, rightEyeLayer, mouthLayer].forEach {
+            $0.opacity = 1                                        // 模型终点
             $0.add(fade, forKey: "faceFade")
         }
-        
-        //揭晓抖动
+
+        // 揭晓抖一下
         let pop = CAKeyframeAnimation(keyPath: "transform")
         pop.values = [
             CATransform3DIdentity,
             CATransform3DMakeScale(1.12, 0.90, 1),
             CATransform3DMakeScale(0.96, 1.06, 1),
             CATransform3DIdentity,
-        ].map { NSValue(caTransform3D: $0)}
+        ].map { NSValue(caTransform3D: $0) }
         pop.keyTimes = [0, 0.35, 0.7, 1.0]
         pop.duration = 0.45
         layer.add(pop, forKey: "revealPop")
-        
+
         CATransaction.commit()
-        
     }
 }

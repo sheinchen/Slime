@@ -5,5 +5,6 @@
         <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="emotion" attributeType="String" defaultValueString="calm"/>
         <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="reply" optional="YES" attributeType="String"/>
     </entity>
 </model>

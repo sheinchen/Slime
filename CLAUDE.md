@@ -8,7 +8,7 @@
 
 ## 1. 项目一句话
 
-一个有主动关怀能力的 AI 情绪陪伴 App:用户记录碎碎念,每篇诞生一只由情绪驱动样貌的史莱姆,一只 AI 史莱姆在合适时机主动关心用户。iOS 是呈现层。
+一个有主动关怀能力的 AI 情绪日记 App:用户记录碎碎念,每篇诞生一只由情绪驱动样貌的史莱姆,一只 AI 史莱姆在合适时机主动关心用户。记录是主干,主动关怀是差异化亮点。iOS 是呈现层。
 
 ---
 
@@ -19,7 +19,8 @@
 - **布局**:SnapKit(不要手写大量 NSLayoutConstraint)
 - **存储**:Core Data(第一版可先用 UserDefaults + Repository 过渡,但对外接口按 Repository 设计,便于无痛切换)
 - **架构**:MVVM + Repository。View 只负责显示,业务逻辑在 ViewModel,数据读写全部走 Repository,逻辑层与 UI 分离、可测试
-- **形态**:本地为主(当前纯单机,无登录、无账号、无网络账号概念),未来轻后端
+- **形态**:本地为主(当前纯单机,无登录、无账号、无网络账号概念);唯一网络依赖是 AI 调用(经轻后端中转藏 key);其余后端能力(他人回复等)未来迭代再引入
+- **情绪与 AI 结构化输出(已锁死)**:情绪枚举 6 类——happy(开心)/calm(平静)/sad(难过)/angry(生气)/anxious(焦虑)/tired(疲惫),`SlimeEmotion`、prompt 枚举约束、颜色映射均以此为准,不再增减。AI 一次调用结构化返回六字段:摘要、情绪、是否含心愿、心愿时间点、话题分类、共情回应(reply,一句温暖回应,随揭晓/详情呈现)。情绪强度(intensity 1-3)已评估,为后续切片候选,本期不做、不要主动加。
 - **UI 启动**:纯代码搭 UI(可去掉 Storyboard),不依赖 Interface Builder
 
 ---
@@ -87,13 +88,15 @@
     - 依赖:SnapKit 6.0(SPM)。
   - **切片 2(点击详情)✅**:广场点方块 → `didSelectItemAt` → `dataSource.itemIdentifier(for:)` 取 SlimeItem → 注入 `PostDetailViewModel` → push `PostDetailViewController`(只读展示正文+日期)。源码已按五层目录(Models/Repositories/ViewModels/ViewControllers/Views)归位。
   - **切片 3(删除)✅**:补全 CRUD 的 D。`PostRepository.delete(id:)`(NSPredicate 按 id 查 + context.delete)。两个入口:广场长按 `UIContextMenuConfiguration` 菜单删除(diffable 动画移除)、详情页垃圾桶 + `UIAlertController` 确认后删并 pop。详情删完靠广场 `viewWillAppear` 重读自动同步,无回调。
-  - **切片 4(史莱姆 view + 动效)✅**:纯色方块换成独立可复用的 `SlimeView` 组件,广场 cell 嵌入。三步各自 commit:①`UIBezierPath` 画粗糙果冻 blob(身体四段三次贝塞尔+两点眼+弧线嘴,坐标在 100×100 参考系再缩放适配任意尺寸);画法抽成 `SlimeShapeProviding` 协议(`BlobSlimeShape` 默认实现),与结构解耦。②`CASpringAnimation` 弹簧呼吸待机(autoreverse+无限循环,`didMoveToWindow` 上屏/离屏自动启停,beginTime 错相位)。③点击 `CAKeyframeAnimation` squash&stretch Q 弹,`CATransaction` completion 恢复呼吸,再延迟 push 详情。预留接口:`SlimeEmotion`(4 情绪)、`SlimeSpecialState`(彩虹态)、`perform(_:SlimeAction)` 一次性动作 —— 本切片只实现默认情绪 + tapBounce。SlimeView 不感知外部数据。
+  - **切片 4(史莱姆 view + 动效)✅**:纯色方块换成独立可复用的 `SlimeView` 组件,广场 cell 嵌入。三步各自 commit:①`UIBezierPath` 画粗糙果冻 blob(身体四段三次贝塞尔+两点眼+弧线嘴,坐标在 100×100 参考系再缩放适配任意尺寸);画法抽成 `SlimeShapeProviding` 协议(`BlobSlimeShape` 默认实现),与结构解耦。②`CASpringAnimation` 弹簧呼吸待机(autoreverse+无限循环,`didMoveToWindow` 上屏/离屏自动启停,beginTime 错相位)。③点击 `CAKeyframeAnimation` squash&stretch Q 弹,`CATransaction` completion 恢复呼吸,再延迟 push 详情。预留接口:`SlimeEmotion`(6 情绪:happy/calm/sad/angry/anxious/tired,与第 2 节锁定一致)、`SlimeSpecialState`(彩虹态)、`perform(_:SlimeAction)` 一次性动作 —— 本切片只实现默认情绪 + tapBounce。SlimeView 不感知外部数据。
+  - **切片 5(生成页 · 孵化揭晓 + 走进广场)✅**:三步各自 commit。①情绪贯通数据层:Post 加 `emotion`(String,默认 calm,自动轻量迁移)、`SlimeEmotion` 改 String 原始值 + `random()`、`SlimeItem`/Repository.create(content:emotion:)/SquareVM.map 全带上情绪、`SlimeView.bodyColor(for:)` 情绪→颜色。②SlimeView 加 `hatch(completion:)`:未定形(灰+藏五官+缩小)→ 凝结(`CASpringAnimation` 放大)→ 揭晓(`fillColor` 变色 + 五官 `opacity` 淡入 + `CAKeyframeAnimation` 抖),`CATransaction` completion 串接。③`ComposeVM.generate(content:)→SlimeItem?`(校验+随机情绪+存库+返回);`ComposeViewController` 输入/孵化两模式,点"生成"→ hatch → 揭晓完 push 广场。情绪仍是随机(未接 AI);透明身体/彩虹填充/共享元素"走进"转场留后。
+  - **切片 6(接入 AI 情绪分析 · DeepSeek)✅**:随机情绪换成真实分析。①`AIService` 协议 + `DeepSeekAIService`(OpenAI 兼容 /chat/completions,`response_format:json_object`,两层 JSON 解析;prompt=软萌史莱姆性格+6情绪 few-shot+安全底线+只回 JSON);`AIConfig`(baseURL/model 配置项),key 存 gitignore 的 `Secrets.plist`;**本切片只返回 emotion+reply**,摘要/心愿/话题留后。②Post 加 `reply`(String?,可选,轻量迁移);Repository.create 带 reply。③`ComposeVM.generate` 改 `async throws`(@MainActor,调 AI→存库→返回);SlimeView 的 hatch 拆成 `beginHatching()`(凝结盖住网络延迟)+ `reveal(to:completion:)`(拿真实情绪再揭晓);VC 用 `Task`+`do/catch`。错误处理最终形态:**失败不伪造、不存帖、`async throws` 上抛,VC 弹提示+保留原文重试**;失败路径加最短孵化时长(秒失败也先露灰史莱姆)。
 - **正在做**:
-  - (切片 4 已完,切片 5 待定)
+  - (切片 6 已完,切片 7 待定)
 - **下一步(待做)**:
-  - 切片 5 候选:空广场占位提示 / 情绪驱动史莱姆(颜色+表情+形变,需先接 AI 情绪分析、定 AI 服务选型)/ 孵化揭晓页(复用放大版 SlimeView + 揭晓动画)。
+  - 切片 7 候选:reply 展示位置(揭晓时/详情页)/ AI 结构化输出补摘要+心愿+话题四字段 / 空广场占位提示 / 揭晓可跳过 + 高频降级 / "走进广场"共享元素转场 / 透明身体+彩虹液体填充 / 主动关怀规则引擎(阶段二核心)。
 - **关键待确认项**(来自 PRD,做到相关切片再定):
-  - AI 服务选型、后端选型、真机/开发者账号、通知实现方式、隐私处理、情绪枚举锁定
+  - 后端选型(轻后端中转藏 key,现为客户端直连 DeepSeek+Secrets.plist,上线前必换)、真机/开发者账号、通知实现方式、隐私处理(情绪枚举已锁定 6 类见第 2 节;AI 服务选型已定 DeepSeek)
 
 ---
 
@@ -101,6 +104,7 @@
 
 - 登录 / 账号体系(与"他人回复"同期,未来才做)
 - 他人回复 / 社区功能
+- 帖子久无回应时的 AI 回应(已挪 P2,依赖"他人回复",与其同期引入)
 - 挑战 / 奖励 / 游戏化
 - 多用户、数据同步、内容审核
 

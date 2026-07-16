@@ -12,9 +12,11 @@ enum SlimeEmotion: String {
     case calm
     case sad
     case angry
-    
+    case anxious   // 焦虑
+    case tired     // 疲惫
+
     static func random() -> SlimeEmotion {
-        [.happy, .calm, .sad, .angry].randomElement()!
+        [.happy, .calm, .sad, .angry, .anxious, .tired].randomElement()!
     }
 }
 

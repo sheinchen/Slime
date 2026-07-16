@@ -108,20 +108,58 @@ final class ComposeViewController: UIViewController {
         navigationController?.pushViewController(SquareViewController(), animated: true)
     }
 
-    // 生成:VM 存数据并返回展示数据 → 播孵化揭晓 → 走进广场
+    // 生成:先出未定形并凝结(乐观 UI)→ 后台调 AI → 拿到真实情绪再揭晓 → 走进广场
     @objc private func generateTapped() {
-        guard let item = viewModel.generate(content: textView.text) else { return }
+        let text = textView.text ?? ""
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         enterHatchingMode()
-        slimeView.emotion = item.emotion
+        slimeView.beginHatching()     // 立刻凝结,用动画盖住下面的网络等待
 
-        // hatch 的 completion 由 SlimeView 在揭晓结束时回调;我们在这里接着走进广场
-        slimeView.hatch { [weak self] in
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                self?.goToSquare()
+        // Task:进入 async 世界,后台等 AI 结果(界面不卡,凝结/待机动画照播)
+        Task {
+            //失败也有孵化画面
+            let startedAt = DispatchTime.now()
+            let minHatchNanos: UInt64 = 800_000_000
+            do {
+                let item =  try await viewModel.generate(content: text)
+                // 拿到真实情绪 → 揭晓;揭晓完延迟一下走进广场
+                slimeView.reveal(to: item.emotion) { [weak self] in
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                        self?.goToSquare()
+                    }
+                }
+            } catch {
+                //返回输入
+                await waitAtLeast(minHatchNanos, since: startedAt)
+                handleGenerateFailure(error)
             }
         }
     }
+    
+    private func waitAtLeast(_ minNanos: UInt64, since start: DispatchTime) async {
+        let elapsed = DispatchTime.now().uptimeNanoseconds - start.uptimeNanoseconds
+        if elapsed < minNanos {
+            try? await Task.sleep(nanoseconds: minNanos - elapsed)
+        }
+    }
+    
+    private func handleGenerateFailure(_ error: Error) {
+        print("生成失败\(error)")
+        
+        slimeView.isHidden = true
+        textView.isHidden = false
+        placeholderLabel.isHidden = !(textView.text ?? "").isEmpty
+        navigationItem.rightBarButtonItem?.isEnabled = true
+        
+        let alert = UIAlertController(
+            title: "分析失败",
+            message: "嗷 网络好像出了点问题",
+            preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "收到", style: .cancel))
+        present(alert, animated: true)
+    }
+    
 
     private func goToSquare() {
         navigationController?.pushViewController(SquareViewController(), animated: true)

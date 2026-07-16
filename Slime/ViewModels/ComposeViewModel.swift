@@ -11,28 +11,25 @@ final class ComposeViewModel {
     
     //依赖协议，可以测试
     private let repository: PostRepository
+    private let aiService: AIService
     
-    init(repository: PostRepository = CoreDataPostRepository()) {
+    init(repository: PostRepository = CoreDataPostRepository(),
+         aiService: AIService = DeepSeekAIService()) {
         self.repository = repository
+        self.aiService = aiService
     }
     
-    @discardableResult
-    func save(content: String) -> Bool {
-        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return false }
-        repository.create(content: trimmed, emotion: .random())
-        //先随机emotion
-        return true
-    }
+ 
     
-    //生成Slime
-    func generate(content: String) -> SlimeItem? {
+    //生成Slime 错误往上抛
+    func generate(content: String) async throws -> SlimeItem {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return nil }
         
-        let emotion = SlimeEmotion.random()
-        let post = repository.create(content: trimmed, emotion: emotion)
-        return SlimeItem(id: post.id, content: post.content, createdAt: post.createdAt, emotion: emotion)
+        //调ai
+        let analysis = try await aiService.analyze(content: trimmed)
+       //成功即存库
+        let post = repository.create(content: trimmed, emotion: analysis.emotion, reply: analysis.reply)
+        return SlimeItem(id: post.id, content: post.content, createdAt: post.createdAt, emotion: analysis.emotion)
     }
 }
 

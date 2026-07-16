@@ -83,17 +83,18 @@
 > 核心亮点。情绪打标签、规则引擎、Agent 决策、聊天、孵化揭晓。
 
 ### 4.1 AI 情绪分析 + 摘要(P0)
-- ⬜ 一次结构化输出(JSON):摘要 + 情绪 + 是否含心愿 + 心愿时间 + 话题分类
-- ⬜ async/await 后台调用,不阻塞 UI(@MainActor 回主线程)
-- ⬜ 异常兜底(网络失败等)
-- ⬜ 情绪标签持久化到 Post
+- 🟨 结构化输出(JSON):切片 6 先做 **emotion + reply** 两字段;摘要 / 是否含心愿 / 心愿时间 / 话题分类留后
+- ✅ async/await 后台调用,不阻塞 UI(ComposeVM @MainActor;网络在 URLSession 后台,回主线程写库)
+- ✅ 错误处理:改为 **失败即抛错 + 用户重试**(不伪造情绪、不存帖子;VM `async throws`,VC `do/catch` 弹提示、保留原文重试)
+- ✅ 情绪标签持久化到 Post(切片 5 已加 emotion;切片 6 加 reply)
+- 服务选型:**DeepSeek(OpenAI 兼容)**;base URL / 模型名做配置项,key 存 gitignore 的 Secrets.plist
 
 ### 4.2 生成史莱姆 · 孵化揭晓(P0)
-- ⬜ 乐观 UI:先放灰色未定形占位史莱姆
-- ⬜ 分析返回后揭晓颜色 + 表情 + wobble 动画
-- ⬜ 样貌多维度:颜色(情绪)、表情(细分)、大小(长度/重要度)
-- ⬜ 揭晓动画短(<1s)、可跳过;高频记录降级为轻量弹出
-- ⬜ 新史莱姆"走进广场"转场
+- ✅ 乐观 UI:先放灰色未定形占位史莱姆(切片 5:setUndefined(true) 灰身体+藏五官)
+- ✅ 揭晓颜色 + 五官淡入 + wobble 动画(切片 6 起用 AI 真实情绪;失败保证最短孵化时长后再报错)
+- 🟨 样貌多维度:颜色(情绪)已做;表情细分 / 大小(长度/重要度)待后
+- ⬜ 揭晓动画短(<1s)、可跳过;高频记录降级为轻量弹出(留后)
+- 🟨 新史莱姆"走进广场"转场:已用标准 push 转场;共享元素"走进"动画留后
 
 ### 4.3 史莱姆广场 · 动态化(P0)
 - 🟨 情绪驱动动效(开心蹦跳 / 难过扁塌挪动等)——已有通用动效骨架(呼吸+Q弹),按情绪区分留待接 AI
@@ -148,6 +149,24 @@
 ## 七、开发日志(时间倒序)
 
 > 每完成一个切片,在此追加一条:日期 · 做了什么 · 遇到的坑 / AI 协作记录(面试素材)。
+
+### 2026-07-16(切片 6)
+- **切片 6:接入 AI 情绪分析(DeepSeek)+ 软萌回复**。随机情绪换成真实分析。
+  - ① AIService 层:`protocol AIService { func analyze(content:) async throws -> AIAnalysis }` + `DeepSeekAIService`(OpenAI 兼容 /chat/completions,`response_format: json_object`,两层 JSON 解析:外层 OpenAI 壳 → message.content 内层 {emotion,reply})。prompt = 软萌史莱姆性格 + 6 情绪 few-shot 锁风格 + 安全底线 + 只回 JSON。`AIConfig`(baseURL/model 配置项)、key 从 gitignore 的 `Secrets.plist` 读。范围:只做 emotion+reply,摘要/心愿/话题留后。
+  - ② Core Data:Post 加 `reply`(String?,可选 → 轻量迁移无需默认值);Repository.create 带上 reply。
+  - ③ 接进揭晓:`ComposeVM.generate(content:) async throws -> SlimeItem`(@MainActor;调 AI → 存库 → 返回);SlimeView 的 hatch 拆成 `beginHatching()`(未定形+凝结+灰待机,盖住网络延迟)和 `reveal(to:completion:)`(拿到真实情绪再揭晓);VC 用 `Task` + `do/catch`。
+  - 错误处理(用户要求最终形态):失败不伪造、不存帖子,`async throws` 往上抛,VC 弹"分析失败"+保留原文重试;失败路径加"最短孵化时长"(no-net 秒失败也先让灰史莱姆露脸再报错)。
+- 新概念:async/await + async throws(try await 不 catch 即上抛)、@MainActor、URLSession.data(for:)、Codable 编解码两层 JSON、Task / Task.sleep、Core Data 轻量迁移(可选字段)、密钥 gitignore 隔离。
+- 待确认项更新:AI 服务选型已定(DeepSeek)。
+
+### 2026-07-09(切片 5)
+- **切片 5:生成页 · 孵化揭晓 + 走进广场**。三步各自 commit:
+  - ① 情绪贯通数据层:Post 加 `emotion`(String,默认 calm → 自动轻量迁移,老数据不丢);`SlimeEmotion` 改 String 原始值 + `random()`;`SlimeItem` / `Repository.create(content:emotion:)` / `SquareVM.map` 全带情绪;`SlimeView.bodyColor(for:)` 情绪→颜色;广场按存下来的情绪上色。
+  - ② `SlimeView.hatch(completion:)`:未定形(灰+藏五官+缩小)→ 凝结(CASpringAnimation 放大)→ 揭晓(fillColor 变色 + 五官 opacity 淡入 + CAKeyframeAnimation 抖),用 CATransaction completionBlock 串接三段,最后回调上层。
+  - ③ `ComposeVM.generate(content:)→SlimeItem?`(校验+随机情绪+存库+返回展示数据);`ComposeViewController` 输入/孵化两模式,点"生成"→ enterHatchingMode → slimeView.hatch → 揭晓完延迟 push 广场;viewWillAppear 回输入模式。
+- 关键设计:情绪必须存库,"走进广场"的才是同一只(揭晓色=广场色);也为接 AI 铺好路(只需把随机换成分析)。
+- 新概念:Core Data 轻量迁移(加属性+默认值)、fillColor/opacity 可动画、CATransaction completionBlock 串接动画、乐观 UI。
+- 遗留小项:ComposeVM 里旧的 `save` 已无人调用(可择机删);情绪仍随机,待 AI 切片替换。
 
 ### 2026-07-08(切片 4)
 - **切片 4:纯色方块 → 可复用 SlimeView 组件(纯代码绘制 + 原生动效)**。三步各自 commit:
