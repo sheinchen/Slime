@@ -14,8 +14,20 @@ final class ComposeViewController: UIViewController {
 
     // MARK: - 依赖
 
-    private let viewModel = ComposeViewModel()
-
+    private let viewModel: ComposeViewModel
+    private let careViewModel: CareViewModel
+    private var careBubble: CareBubbleView?
+    
+    init(viewModel: ComposeViewModel, careViewModel: CareViewModel) {
+        self.viewModel = viewModel
+        self.careViewModel = careViewModel
+        super.init(nibName: nil, bundle: nil)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
     // MARK: - UI 控件
 
     /// 多行输入框。
@@ -45,6 +57,17 @@ final class ComposeViewController: UIViewController {
         return v
     }()
 
+    /// 揭晓后在史莱姆下面淡入的一行 AI 回复。平时隐藏。
+    private let replyLabel: UILabel = {
+        let label = UILabel()
+        label.font = .systemFont(ofSize: 16, weight: .medium)
+        label.textColor = .secondaryLabel
+        label.textAlignment = .center
+        label.numberOfLines = 0
+        label.isHidden = true
+        return label
+    }()
+
     // MARK: - 生命周期
 
     override func viewDidLoad() {
@@ -66,6 +89,8 @@ final class ComposeViewController: UIViewController {
         if slimeView.isHidden {
             textView.becomeFirstResponder()
         }
+        //主动关心
+        presentCareIfNeeded()
     }
 
     // MARK: - 搭建 UI
@@ -85,6 +110,7 @@ final class ComposeViewController: UIViewController {
         view.addSubview(textView)
         textView.addSubview(placeholderLabel)
         view.addSubview(slimeView)
+        view.addSubview(replyLabel)
 
         textView.snp.makeConstraints { make in
             make.top.equalTo(view.safeAreaLayoutGuide).offset(16)
@@ -98,6 +124,10 @@ final class ComposeViewController: UIViewController {
         slimeView.snp.makeConstraints { make in
             make.center.equalToSuperview()
             make.width.height.equalTo(180)
+        }
+        replyLabel.snp.makeConstraints { make in
+            make.top.equalTo(slimeView.snp.bottom).offset(16)
+            make.leading.trailing.equalToSuperview().inset(32)
         }
     }
 
@@ -113,6 +143,10 @@ final class ComposeViewController: UIViewController {
         let text = textView.text ?? ""
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
+        //孵化前收走气泡
+        careBubble?.removeFromSuperview()
+        careBubble = nil
+        
         enterHatchingMode()
         slimeView.beginHatching()     // 立刻凝结,用动画盖住下面的网络等待
 
@@ -123,10 +157,12 @@ final class ComposeViewController: UIViewController {
             let minHatchNanos: UInt64 = 800_000_000
             do {
                 let item =  try await viewModel.generate(content: text)
-                // 拿到真实情绪 → 揭晓;揭晓完延迟一下走进广场
+                // 拿到真实情绪 → 揭晓;揭晓完淡入 AI 回复,读一会儿再走进广场
                 slimeView.reveal(to: item.emotion) { [weak self] in
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                        self?.goToSquare()
+                    guard let self else { return }
+                    self.showReply(item.reply)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
+                        self.goToSquare()
                     }
                 }
             } catch {
@@ -148,10 +184,11 @@ final class ComposeViewController: UIViewController {
         print("生成失败\(error)")
         
         slimeView.isHidden = true
+        replyLabel.isHidden = true
         textView.isHidden = false
         placeholderLabel.isHidden = !(textView.text ?? "").isEmpty
         navigationItem.rightBarButtonItem?.isEnabled = true
-        
+
         let alert = UIAlertController(
             title: "分析失败",
             message: "嗷 网络好像出了点问题",
@@ -161,8 +198,44 @@ final class ComposeViewController: UIViewController {
     }
     
 
+    // 淡入一行 AI 回复(在史莱姆下面)
+    private func showReply(_ reply: String?) {
+        guard let reply, !reply.isEmpty else { return }
+        replyLabel.text = reply
+        replyLabel.alpha = 0
+        replyLabel.isHidden = false
+        UIView.animate(withDuration: 0.3) { self.replyLabel.alpha = 1 }
+    }
+
     private func goToSquare() {
         navigationController?.pushViewController(SquareViewController(), animated: true)
+    }
+    
+    //MARK: - 主动过关心出现
+    private func presentCareIfNeeded() {
+        guard careBubble == nil,
+              slimeView.isHidden,
+              let care = careViewModel.activeCare() else { return }
+        
+        let bubble = CareBubbleView(text: care.text)
+        view.addSubview(bubble)
+        bubble.snp.makeConstraints { make in
+            make.top.equalTo(textView.snp.bottom).offset(20)
+            make.leading.equalToSuperview().inset(16)
+            make.trailing.lessThanOrEqualToSuperview().inset(16)
+        }
+        
+        bubble.onFirstExpand = { [weak self] in
+            self?.careViewModel.markRead(care)
+        }
+        bubble.onDismiss = { [weak self] in
+            self?.careBubble?.removeFromSuperview()
+            self?.careBubble = nil
+        }
+        
+        careBubble = bubble
+        bubble.playEntrance()
+        careViewModel.markShown(care)
     }
 
     // MARK: - 两种模式切换
@@ -171,12 +244,14 @@ final class ComposeViewController: UIViewController {
         textView.resignFirstResponder()
         textView.isHidden = true
         placeholderLabel.isHidden = true
+        replyLabel.isHidden = true
         slimeView.isHidden = false
         navigationItem.rightBarButtonItem?.isEnabled = false   // 孵化中禁止再点生成
     }
 
     private func resetToInputMode() {
         slimeView.isHidden = true
+        replyLabel.isHidden = true
         textView.isHidden = false
         textView.text = ""
         placeholderLabel.isHidden = false

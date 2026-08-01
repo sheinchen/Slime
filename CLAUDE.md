@@ -25,6 +25,18 @@
 
 ---
 
+## 2.1 主动关心系统(已定稿,实现时按此,不要另提方案)
+
+> **完整设计见《项目执行文档》第 7 节**(五段管道、Rule/Event/引擎、三批规则、演出交互)。这里只列实现时不能违反的红线。
+
+- **管道**:感知(Event)→ 记忆 → 规则召回(本地规则引擎)→ 模型决断(AI 话术)→ 行动(待送出关心 + 打开时演出)。
+- **分工锁死**:"何时关心"由**本地确定性规则**判断,**AI 不参与触发决策**;AI 只做两件翻译 —— 发帖时内容→结构化标签、触发后触发原因→温柔话术。(理解外包给 AI,决策留在本地)
+- **引擎红线**:引擎只做「遍历 → 过滤事件类型 → 查冷却 → 条件判断 → 产出 Action」,**不含任何具体规则的逻辑**(引擎里出现 "sad"、"3 篇" 即跑偏);加规则 = 新增 Rule 文件 + 注册一行;冷却记录**持久化**;**必须有仲裁**(一次打开只送一条);Action 是持久化的「待送出关心」记录,**不直接操作 UI**;引擎**依赖注入,不做单例**。
+- **分批不能提前铺开**:第一批只做「持续低谷 / 情绪回升 / 连续高光」三条;第二批(基线类)、第三批(深夜连发)、心愿提醒(第七类规则)都**以后再说,别主动加**。
+- **文案铁律**:探询不断言;**永远不暴露规则本身**(不出现"连续三篇""检测到");不说教、不给建议;不用推送,只在下次打开 App 时呈现。
+
+---
+
 ## 3. 怎么带我(重要 —— 请严格按这个来)
 
 **我的真实画像:**
@@ -91,10 +103,16 @@
   - **切片 4(史莱姆 view + 动效)✅**:纯色方块换成独立可复用的 `SlimeView` 组件,广场 cell 嵌入。三步各自 commit:①`UIBezierPath` 画粗糙果冻 blob(身体四段三次贝塞尔+两点眼+弧线嘴,坐标在 100×100 参考系再缩放适配任意尺寸);画法抽成 `SlimeShapeProviding` 协议(`BlobSlimeShape` 默认实现),与结构解耦。②`CASpringAnimation` 弹簧呼吸待机(autoreverse+无限循环,`didMoveToWindow` 上屏/离屏自动启停,beginTime 错相位)。③点击 `CAKeyframeAnimation` squash&stretch Q 弹,`CATransaction` completion 恢复呼吸,再延迟 push 详情。预留接口:`SlimeEmotion`(6 情绪:happy/calm/sad/angry/anxious/tired,与第 2 节锁定一致)、`SlimeSpecialState`(彩虹态)、`perform(_:SlimeAction)` 一次性动作 —— 本切片只实现默认情绪 + tapBounce。SlimeView 不感知外部数据。
   - **切片 5(生成页 · 孵化揭晓 + 走进广场)✅**:三步各自 commit。①情绪贯通数据层:Post 加 `emotion`(String,默认 calm,自动轻量迁移)、`SlimeEmotion` 改 String 原始值 + `random()`、`SlimeItem`/Repository.create(content:emotion:)/SquareVM.map 全带上情绪、`SlimeView.bodyColor(for:)` 情绪→颜色。②SlimeView 加 `hatch(completion:)`:未定形(灰+藏五官+缩小)→ 凝结(`CASpringAnimation` 放大)→ 揭晓(`fillColor` 变色 + 五官 `opacity` 淡入 + `CAKeyframeAnimation` 抖),`CATransaction` completion 串接。③`ComposeVM.generate(content:)→SlimeItem?`(校验+随机情绪+存库+返回);`ComposeViewController` 输入/孵化两模式,点"生成"→ hatch → 揭晓完 push 广场。情绪仍是随机(未接 AI);透明身体/彩虹填充/共享元素"走进"转场留后。
   - **切片 6(接入 AI 情绪分析 · DeepSeek)✅**:随机情绪换成真实分析。①`AIService` 协议 + `DeepSeekAIService`(OpenAI 兼容 /chat/completions,`response_format:json_object`,两层 JSON 解析;prompt=软萌史莱姆性格+6情绪 few-shot+安全底线+只回 JSON);`AIConfig`(baseURL/model 配置项),key 存 gitignore 的 `Secrets.plist`;**本切片只返回 emotion+reply**,摘要/心愿/话题留后。②Post 加 `reply`(String?,可选,轻量迁移);Repository.create 带 reply。③`ComposeVM.generate` 改 `async throws`(@MainActor,调 AI→存库→返回);SlimeView 的 hatch 拆成 `beginHatching()`(凝结盖住网络延迟)+ `reveal(to:completion:)`(拿真实情绪再揭晓);VC 用 `Task`+`do/catch`。错误处理最终形态:**失败不伪造、不存帖、`async throws` 上抛,VC 弹提示+保留原文重试**;失败路径加最短孵化时长(秒失败也先露灰史莱姆)。
+  - **切片 6 补充(reply 揭晓展示)✅**:`SlimeItem` 加 `reply` 字段(SquareVM.map / ComposeVM.generate 两处构造同步补上),生成页揭晓后在史莱姆下面淡入一行 AI 回复(`replyLabel`,`UIView.animate` 淡入),停留约 2.2 秒再走进广场;失败/重置路径一并隐藏。详情页展示 reply 留后(数据已备好)。
+  - **切片 7(主动关心系统 · 第一批)✅**:五段管道端到端跑通,全部亲手敲(演出 UI 也是)。
+    - ①记忆层:Core Data 加 `CareMessage`(id/ruleId/text/createdAt/status,默认 pending)+ `RuleCooldown`(ruleId/lastTriggeredAt/**ignoredCount** Int16,为以后自适应频控留形状);`CareEvent`(postSaved/appOpened)、`CareReason`(结构化触发原因,不含话术)、`CareStatus` 五值(pending→shown→read→accepted/ignored)+ `PendingCare` 值类型;`CooldownStore`(lastTrigger/recordTrigger/markEngaged 归零/markIgnored +1)、`CareMessageStore`(active/save→返回被覆盖的 shown ruleId/sweepExpired/updateStatus;pending 被覆盖直接删不计忽略,shown 才算 ignored)。
+    - ②引擎:`CareRule` 协议(id/triggerEvents/cooldown?/evaluate(context)→CareReason?)+ `RuleContext`(posts+cooldowns+now 注入,now 可测);`CareEngine`(@MainActor,遍历→过滤事件→时间冷却→evaluate→话术→save+recordTrigger,**第一个命中即停=仲裁,数组顺序=优先级**;不含任何规则字眼)。三条规则:`LowMoodStreakRule`(近3篇全消极,7天冷却)/`MoodRecoverRule`(**配对型冷却**:与低谷触发配对一对一次,cooldown=nil 自管)/`HappyStreakRule`(连3篇 happy,7天)。曾用 `StubOpeningProvider` 单独验证决策层(四幕冒烟:触发/冷却挡/配对回升/高光)后删除。
+    - ③AI 话术:`DeepSeekAIService` 实现 `CareOpeningProvider.opening(for:)`(reason 本地翻成内部描述→text 模式→temperature 0.8);carePrompt 铁律:安全底线>不暴露判断依据>探询不断言>不说教。`ComposeVM.generate` 存库后独立 Task 发 `.postSaved`(careEngine 为可选依赖,旁路不拖主流程)。
+    - ④组装+演出:SceneDelegate 作**组合根**(建 stores/规则/引擎,注入 VM/VC,启动发 `.appOpened` 清扫过期);`CareViewModel`(activeCare/markShown/markRead+markEngaged);`CareBubbleView`(小史莱姆+「…」气泡,点开约束驱动长大显全文,再点下沉退场;露面即 shown,点开即 read+归零);ComposeVC.viewDidAppear 演出、孵化前收走气泡。
 - **正在做**:
-  - (切片 6 已完,切片 7 待定)
+  - (切片 7 已完,下一条待定)
 - **下一步(待做)**:
-  - 切片 7 候选:reply 展示位置(揭晓时/详情页)/ AI 结构化输出补摘要+心愿+话题四字段 / 空广场占位提示 / 揭晓可跳过 + 高频降级 / "走进广场"共享元素转场 / 透明身体+彩虹液体填充 / 主动关怀规则引擎(阶段二核心)。
+  - 候选:聊天模式(点开关心后可继续聊,`accepted` 状态接上)/ 第二批规则(个人基线统计)/ 第三批规则(深夜连发 + 优先级抢占)/ 自适应频控(按 ignoredCount 拉长冷却,只改引擎一处)/ 心愿提醒(AIService 扩展 hasWish+wishDate)/ 详情页展示 reply / AI 结构化输出补摘要+话题 / 空广场占位提示 / 揭晓可跳过 + 高频降级 / "走进广场"共享元素转场 / 透明身体+彩虹液体填充。
 - **关键待确认项**(来自 PRD,做到相关切片再定):
   - 后端选型(轻后端中转藏 key,现为客户端直连 DeepSeek+Secrets.plist,上线前必换)、真机/开发者账号、通知实现方式、隐私处理(情绪枚举已锁定 6 类见第 2 节;AI 服务选型已定 DeepSeek)
 

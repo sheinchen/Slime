@@ -20,14 +20,30 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // 1. 用这个 scene 创建一块 window(App 的画布,所有界面都画在它上面)
         let window = UIWindow(windowScene: windowScene)
 
-        // 2. 指定第一个界面:输入页,外面套一层导航控制器(以后能 push 到广场)
-        let composeVC = ComposeViewController()
+        // 组合根
+        let postRepo = CoreDataPostRepository()
+        let cooldowns = CoreDataCooldownStore()
+        let careMessages = CoreDataCareMessageStore()
+        let aiService = DeepSeekAIService()
+        
+        let careEngine = CareEngine(rules: [MoodRecoverRule(), LowMoodStreakRule(), HappyStreakRule()],
+                                    posts: postRepo,
+                                    cooldowns: cooldowns,
+                                    messages: careMessages,
+                                    openingProvider: aiService)
+        
+        let composeVM = ComposeViewModel(repository: postRepo, aiService: aiService, careEngine: careEngine)
+        let composeVC = ComposeViewController(viewModel: composeVM,
+                                              careViewModel: CareViewModel(messages: careMessages, cooldowns: cooldowns))
         let navigationController = UINavigationController(rootViewController: composeVC)
         window.rootViewController = navigationController
 
         // 3. 让 window 显示出来,并持有它(存到属性里,不然会被释放)
         window.makeKeyAndVisible()
         self.window = window
+        
+        Task { await careEngine.handle(.appOpened)}
+        
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {

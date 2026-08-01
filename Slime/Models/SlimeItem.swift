@@ -12,4 +12,5 @@ nonisolated struct SlimeItem: Hashable {
     let content: String
     let createdAt: Date
     let emotion: SlimeEmotion
+    let reply: String?
 }
