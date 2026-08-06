@@ -34,4 +34,8 @@ final class CareViewModel {
         messages.updateStatus(id: care.id, to: .read)
         cooldowns.markEngaged(ruleId: care.ruleId)
     }
+    
+    func markAccepted(_ care: PendingCare) {
+        messages.updateStatus(id: care.id, to: .accepted)
+    }
 }

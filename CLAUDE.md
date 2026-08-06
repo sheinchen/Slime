@@ -110,9 +110,9 @@
     - ③AI 话术:`DeepSeekAIService` 实现 `CareOpeningProvider.opening(for:)`(reason 本地翻成内部描述→text 模式→temperature 0.8);carePrompt 铁律:安全底线>不暴露判断依据>探询不断言>不说教。`ComposeVM.generate` 存库后独立 Task 发 `.postSaved`(careEngine 为可选依赖,旁路不拖主流程)。
     - ④组装+演出:SceneDelegate 作**组合根**(建 stores/规则/引擎,注入 VM/VC,启动发 `.appOpened` 清扫过期);`CareViewModel`(activeCare/markShown/markRead+markEngaged);`CareBubbleView`(小史莱姆+「…」气泡,点开约束驱动长大显全文,再点下沉退场;露面即 shown,点开即 read+归零);ComposeVC.viewDidAppear 演出、孵化前收走气泡。
 - **正在做**:
-  - (切片 7 已完,下一条待定)
+  - **切片 8(AI 聊天模式)**,分两步各自 commit:①非流式跑通 —— Core Data 建 `ChatSession`/`ChatMessage`(一对多关系,会话经 careMessageId 关联触发它的关心)、聊天界面(中央呼吸史莱姆+头顶气泡,无界面感)、上下文组装(人设+触发语境(关心对应的那几篇帖子)+最近 N 轮历史+当前消息,N=10)、气泡加「聊聊」入口(accepted 接上)、AIService 新增多轮 chat 方法(与单帖分析分开);失败该轮可重试不丢历史;随时退出不挽留,消息实时落库。②升级 SSE 流式输出(stream 参数/URLSession.bytes/AsyncSequence/分片解析/主线程 UI 节流)+ 说话时史莱姆轻微起伏。行为约束进 system:短口语、一次一小段、禁 Markdown、不说教、温柔收尾、安全底线照旧。
 - **下一步(待做)**:
-  - 候选:聊天模式(点开关心后可继续聊,`accepted` 状态接上)/ 第二批规则(个人基线统计)/ 第三批规则(深夜连发 + 优先级抢占)/ 自适应频控(按 ignoredCount 拉长冷却,只改引擎一处)/ 心愿提醒(AIService 扩展 hasWish+wishDate)/ 详情页展示 reply / AI 结构化输出补摘要+话题 / 空广场占位提示 / 揭晓可跳过 + 高频降级 / "走进广场"共享元素转场 / 透明身体+彩虹液体填充。
+  - 候选:第二批规则(个人基线统计)/ 第三批规则(深夜连发 + 优先级抢占)/ 自适应频控(按 ignoredCount 拉长冷却,只改引擎一处)/ 心愿提醒(AIService 扩展 hasWish+wishDate)/ 详情页展示 reply / AI 结构化输出补摘要+话题 / 空广场占位提示 / 揭晓可跳过 + 高频降级 / "走进广场"共享元素转场 / 透明身体+彩虹液体填充。
 - **关键待确认项**(来自 PRD,做到相关切片再定):
   - 后端选型(轻后端中转藏 key,现为客户端直连 DeepSeek+Secrets.plist,上线前必换)、真机/开发者账号、通知实现方式、隐私处理(情绪枚举已锁定 6 类见第 2 节;AI 服务选型已定 DeepSeek)
 

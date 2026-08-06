@@ -1,0 +1,29 @@
+//
+//  ChatModels.swift
+//  Slime
+//
+//  Created by shiying on 2026/8/1.
+//
+
+import Foundation
+
+//便于存库
+enum ChatRole: String {
+    case user
+    case slime
+}
+
+//一条聊天记录
+struct ChatMessageItem: Hashable {
+    let id: UUID
+    let role: ChatRole
+    let content: String
+    let createdAt: Date
+}
+
+//一个会话基本信息
+struct ChatSessionInfo {
+    let id: UUID
+    let careMessageId: UUID
+    let createdAt: Date
+}

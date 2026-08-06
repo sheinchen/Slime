@@ -7,16 +7,32 @@
 
 import Foundation
 
+//MARK: - AI消息
+struct AIChatMessage {
+    let role:String
+    let content: String
+}
+//MARK: - 错误类型
+enum AIError: Error {
+    case badStatus
+    case emptyContent
+}
+
 protocol AIService {
     func analyze(content: String) async throws -> AIAnalysis
+    //多轮聊天，组装上下文，返回回复
+    func chat(messages: [AIChatMessage]) async throws -> String
 }
 
 final class DeepSeekAIService: AIService, CareOpeningProvider {
     
+    //共享人设
+    private static let persona = """
+    你是用户的一只软萌史莱姆朋友,说话软软的、暖暖的、有点憨憨的可爱感,像一个会关心人的小团子。语气轻松亲切,不端着、不说教。
+"""
+    
     //MARK: -关心prompt
-    private static let carePrompt = """
-        你是用户的一只软萌史莱姆朋友,说话软软的、暖暖的、有点憨憨的可爱感。现在不是在回复用户写的内容,而是你主动想跟用户说一句话。
-
+    private static let carePrompt = persona + """
         我会告诉你"你为什么想关心ta"(这是内部原因,用户看不到),你把它化成一句自然、温柔的开场白。
 
         铁律(必须遵守):
@@ -115,11 +131,46 @@ final class DeepSeekAIService: AIService, CareOpeningProvider {
         return AIAnalysis(emotion: emotion, reply: parsed.reply)
     }
     
+    //MARK: - 多轮聊天
+    func chat(messages: [AIChatMessage]) async throws -> String {
+        let url = URL(string: AIConfig.baseURL + "/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(AIConfig.apiKey)", forHTTPHeaderField: "Authorization")
+        
+        let body = ChatRequest(model: AIConfig.model,
+                               messages: messages.map {
+            .init(role: $0.role, content: $0.content)
+        },
+                               response_format: .init(type: "text"),
+                               temperature: 1.0,
+                               stream: false)
+        
+        request.httpBody = try JSONEncoder().encode(body)
+        
+        let (data,response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else { throw AIError.badStatus}
+        let completion = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
+        guard let raw = completion.choices.first?.message.content else { throw AIError.emptyContent }
+        let text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { throw AIError.emptyContent }
+        return text
+    }
+    
     //MARK: -prompt
-    private static let systemPrompt = """
-        你是用户的一只软萌史莱姆朋友,说话软软的、暖暖的、有点憨憨的可爱感,像一个会关心人的小团子。语气轻松亲切,不端着、不说教。reply 只回一句,简短。
-
-        你的任务:读用户这句碎碎念,判断情绪,并以史莱姆的身份回一句暖心话。
+    static let chatSystemPrompt = persona + """
+    现在用户接受了你的关心,进入了和你的对话。对话规则(必须全部遵守):
+    1. 安全底线最高:如果用户表达出严重低落、绝望或自我伤害的倾向,收起可爱腔,真诚温柔地回应,并温柔建议 ta 找信任的人或专业帮助聊聊。
+    2. 短口语:像朋友发消息,一次只回一小段(一两句),绝不长篇大论。
+    3. 禁止任何 Markdown 格式(不用 *、#、列表、编号),就是纯纯的聊天文字。
+    4. 不说教、不给建议清单、不分析对错,陪伴优先:多听、多接住、少指导。
+    5. 温柔收尾:如果用户表达想结束、或回复明显变少变短,自然地收尾(比如"嗯嗯,说出来一点点也很好啦~"),不追问、不挽留。
+    6. 永远不暴露你的判断依据(不出现"连续几篇""记录"这类词)。
+    """
+    
+    private static let systemPrompt = persona + """
+        你的任务:读用户这句碎碎念,判断情绪,并以史莱姆的身份回一句暖心话。reply 只回一句,简短。
         情绪 emotion 只能从这六个里选一个:happy / calm / sad / angry / anxious / tired。
 
         示例:
@@ -136,11 +187,10 @@ final class DeepSeekAIService: AIService, CareOpeningProvider {
         """
     
     
-    //MARK: - 错误类型
-    enum AIError: Error {
-        case badStatus
-        case emptyContent
-    }
+
+    
+    
+
     
     //MARK: - 请求响应的数据结构
     private struct ChatRequest: Encodable {

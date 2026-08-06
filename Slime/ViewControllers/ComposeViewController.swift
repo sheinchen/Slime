@@ -229,8 +229,18 @@ final class ComposeViewController: UIViewController {
             self?.careViewModel.markRead(care)
         }
         bubble.onDismiss = { [weak self] in
-            self?.careBubble?.removeFromSuperview()
-            self?.careBubble = nil
+//            self?.careBubble?.removeFromSuperview()
+//            self?.careBubble = nil
+        }
+        bubble.onChat = { [weak self] in
+            guard let self else { return }
+            self.careViewModel.markAccepted(care)
+//            self.careBubble?.removeFromSuperview()
+//            self.careBubble = nil
+            let chatVM = ChatViewModel(care: care, chatRepo: CoreDataChatRepository(), posts: CoreDataPostRepository(), aiService: DeepSeekAIService())
+            
+            self.navigationController?.pushViewController(ChatViewController(viewModel: chatVM), animated: true)
+            
         }
         
         careBubble = bubble
