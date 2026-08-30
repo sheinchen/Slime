@@ -25,6 +25,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let cooldowns = CoreDataCooldownStore()
         let careMessages = CoreDataCareMessageStore()
         let aiService = DeepSeekAIService()
+        let chatRepo = CoreDataChatRepository()
         
         let careEngine = CareEngine(rules: [MoodRecoverRule(), LowMoodStreakRule(), HappyStreakRule()],
                                     posts: postRepo,
@@ -33,9 +34,20 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
                                     openingProvider: aiService)
         
         let composeVM = ComposeViewModel(repository: postRepo, aiService: aiService, careEngine: careEngine)
-        let composeVC = ComposeViewController(viewModel: composeVM,
-                                              careViewModel: CareViewModel(messages: careMessages, cooldowns: cooldowns))
-        let navigationController = UINavigationController(rootViewController: composeVC)
+        let homeVC = HomeViewController()
+        homeVC.makeComposeViewController = {  backdrop ,onClose in
+            let vc =  ComposeViewController(viewModel: composeVM, careViewModel: CareViewModel(messages: careMessages, cooldowns: cooldowns))
+            vc.onClose = onClose
+            vc.backdropImage = backdrop
+            return vc
+        }
+        homeVC.makeChatViewController = {
+            let vm = ChatViewModel(origin: .direct, chatRepo: chatRepo, posts: postRepo, aiService: aiService)
+            return ChatViewController(viewModel: vm)
+        }
+        
+        let rootVC = RootPagerViewController(pages: [homeVC,SquareViewController()])
+        let navigationController = UINavigationController(rootViewController: rootVC)
         window.rootViewController = navigationController
 
         // 3. 让 window 显示出来,并持有它(存到属性里,不然会被释放)
@@ -57,10 +69,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Called when the scene has moved from an inactive state to an active state.
         // Use this method to restart any tasks that were paused (or not yet started) when the scene was inactive.
         //MARK: test
-//        let post = try? CoreDataStack.shared.viewContext.fetch(Post.fetchRequest())
-//        print("there are\(post?.count)")
-//        post?.forEach {
-//            print("\($0.content)")
+//        Task {
+//            let vm = SquareViewModel()
+//            vm.loadPosts()
+//            let entries = vm.entries
+//            let summary = try await DeepSeekAIService().summarizeDay(entries)
+//            print("蛋", summary.emotion.rawValue, summary.text)
 //        }
     }
 

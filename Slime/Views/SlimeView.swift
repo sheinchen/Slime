@@ -17,6 +17,9 @@ final class SlimeView: UIView {
     //呼吸key
     private let breathingKey = "breathing"
     
+    //说话动效
+    private let talkingKey = "talking"
+    
     //未定型
     private static let undefinedColor = UIColor(white: 0.78, alpha: 1)
     
@@ -258,5 +261,22 @@ final class SlimeView: UIView {
         layer.add(pop, forKey: "revealPop")
 
         CATransaction.commit()
+    }
+    
+    //MARK: - 聊天说话动效
+    func startTalking() {
+        guard layer.animation(forKey: talkingKey) == nil else { return }
+        let bob = CABasicAnimation(keyPath: "position.y")
+        bob.fromValue = layer.position.y
+        bob.toValue = layer.position.y - 4
+        bob.duration = 0.34
+        bob.autoreverses = true
+        bob.repeatCount = .infinity
+        bob.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(bob, forKey: talkingKey)
+    }
+    
+    func stopTalking() {
+        layer.removeAnimation(forKey: talkingKey)
     }
 }

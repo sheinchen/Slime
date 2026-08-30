@@ -9,14 +9,16 @@ import CoreData
 
 //聊天会话的存取
 protocol ChatRepository {
-    //会话匹配关心
-    func findOrCreatedSession(careMessageId: UUID, now: Date) -> ChatSessionInfo
     //一个会话的全部消息
     func messages(sessionId: UUID) -> [ChatMessageItem]
     //新消息并且落库
     @discardableResult
     func append(sessionId: UUID, role: ChatRole, content: String, at date: Date) -> ChatMessageItem
-    
+    //对话开始
+    func createSession(careMessageId: UUID?, now: Date) -> ChatSessionInfo
+    //会话列表活跃排序
+    func recentSessions(limit: Int) -> [ChatSessionInfo]
+    func updateTitle(sessionId: UUID, title: String)
 }
 
 final class CoreDataChatRepository: ChatRepository {
@@ -27,16 +29,31 @@ final class CoreDataChatRepository: ChatRepository {
         self.context = context
     }
     
-    func findOrCreatedSession(careMessageId: UUID, now: Date) -> ChatSessionInfo {
-        if let existing = fetchSession(careMessageId: careMessageId) {
-            return ChatSessionInfo(id: existing.id, careMessageId: existing.careMessageId, createdAt: existing.createdAt)
-        }
+    func createSession(careMessageId: UUID?, now: Date) -> ChatSessionInfo {
         let s = ChatSession(context: context)
         s.id = UUID()
         s.careMessageId = careMessageId
         s.createdAt = now
+        s.updatedAt = now
         saveIfNeeded()
-        return ChatSessionInfo(id: s.id, careMessageId: s.careMessageId, createdAt: s.createdAt)
+        return ChatSessionInfo(s)
+    }
+    
+    func recentSessions(limit: Int) -> [ChatSessionInfo] {
+        let request = ChatSession.fetchRequest()
+        request.sortDescriptors = [
+            NSSortDescriptor(keyPath: \ChatSession.updatedAt, ascending: false)
+        ]
+        request.fetchLimit = limit
+        return ((try? context.fetch(request)) ?? []).map {
+            ChatSessionInfo($0)
+        }
+    }
+    
+    func updateTitle(sessionId: UUID, title: String) {
+        guard let s = fetchSession(id: sessionId) else { return }
+        s.title = title
+        saveIfNeeded()
         
     }
     
@@ -58,7 +75,9 @@ final class CoreDataChatRepository: ChatRepository {
         m.role = role.rawValue
         m.content = content
         m.createdAt = date
-        m.session = fetchSession(id: sessionId)
+        let session = fetchSession(id: sessionId)
+        m.session = session
+        session?.updatedAt = date
         saveIfNeeded()
         return ChatMessageItem(id: m.id, role: role, content: content, createdAt: date)
     }
@@ -71,12 +90,6 @@ final class CoreDataChatRepository: ChatRepository {
         return try? context.fetch(request).first
     }
     
-    private func fetchSession(careMessageId: UUID) -> ChatSession? {
-        let request = ChatSession.fetchRequest()
-        request.predicate = NSPredicate(format: "careMessageId == %@", careMessageId as CVarArg)
-        request.fetchLimit = 1
-        return try? context.fetch(request).first
-    }
     
     private func saveIfNeeded() {
         guard context.hasChanges else { return }
@@ -85,5 +98,15 @@ final class CoreDataChatRepository: ChatRepository {
         } catch {
             print("聊天记录保存失败\(error)")
         }
+    }
+}
+
+private extension ChatSessionInfo {
+    init(_ s: ChatSession) {
+        self.id = s.id
+        self.careMessageId = s.careMessageId
+        self.title = s.title
+        self.createdAt = s.createdAt
+        self.updatedAt = s.updatedAt
     }
 }

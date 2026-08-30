@@ -14,6 +14,7 @@ final class ChatViewController: UIViewController {
     
     private enum Item: nonisolated Hashable {
         case message(ChatMessageItem)
+        case streaming
         case retryHint
     }
     
@@ -34,6 +35,29 @@ final class ChatViewController: UIViewController {
         f.leftViewMode = .always
         f.returnKeyType = .send
         return f
+    }()
+    
+    private let inputTextView: UITextView = {
+        let tv = UITextView()
+        tv.font = .systemFont(ofSize: 16)
+        tv.backgroundColor = .secondarySystemBackground
+        tv.layer.cornerRadius = 18
+        tv.textContainerInset = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+        tv.isScrollEnabled = false
+        return tv
+    }()
+    
+    private static let minInputHeight: CGFloat = 36
+    private static let maxInputHeight: CGFloat = 120
+    private var inputHeightConstraint: Constraint?
+    
+    
+    private let inputPlaceholder: UILabel = {
+        let l = UILabel()
+        l.text = "say something"
+        l.font = .systemFont(ofSize: 16)
+        l.textColor = .tertiaryLabel
+        return l
     }()
     
     private let sendButton: UIButton = {
@@ -67,7 +91,7 @@ final class ChatViewController: UIViewController {
         setupDataSource()
         applySnapshot(animated: false)
         sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
-        inputField.delegate = self
+        inputTextView.delegate = self
         // Do any additional setup after loading the view.
     }
     
@@ -77,7 +101,8 @@ final class ChatViewController: UIViewController {
         //底部输入条
         let inputBar = UIView()
         view.addSubview(inputBar)
-        inputBar.addSubview(inputField)
+        inputBar.addSubview(inputTextView)
+        inputTextView.addSubview(inputPlaceholder)
         inputBar.addSubview(sendButton)
         
         // keyboardLayoutGuide:iOS 15+ 系统自带的"键盘位置向导",
@@ -87,17 +112,24 @@ final class ChatViewController: UIViewController {
             make.leading.trailing.equalToSuperview()
             
             make.bottom.equalTo(view.keyboardLayoutGuide.snp.top)
-            make.height.equalTo(56)
         }
-        inputField.snp.makeConstraints { make in
+        
+        inputTextView.snp.makeConstraints { make in
             make.leading.equalToSuperview().inset(16)
-            make.centerY.equalToSuperview()
-            make.height.equalTo(36)
+            make.top.bottom.equalToSuperview().inset(10)
+            inputHeightConstraint = make.height.equalTo(Self.minInputHeight).constraint
         }
+        
+        inputPlaceholder.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(8)
+            make.leading.equalToSuperview().offset(15)
+        }
+        
         sendButton.snp.makeConstraints { make in
-            make.leading.equalTo(inputField.snp.trailing).offset(8)
+            make.leading.equalTo(inputTextView.snp.trailing).offset(8)
             make.trailing.equalToSuperview().inset(12)
-            make.centerY.equalToSuperview()
+            make.bottom.equalTo(inputTextView.snp.bottom)
+            make.width.height.equalTo(44)
         }
         
         view.addSubview(slimeView)
@@ -116,6 +148,23 @@ final class ChatViewController: UIViewController {
             make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(slimeView.snp.top).offset(-12)
         }
+    }
+    
+    //计算输入框高度
+    private func updateInputHeight() {
+        let width = inputTextView.bounds.width
+        guard width > 0 else { return }
+        
+        let fitting = inputTextView.sizeThatFits(CGSize(width: width, height: .greatestFiniteMagnitude)).height
+        
+        let clamped = min(max(fitting, Self.minInputHeight), Self.maxInputHeight)
+        inputTextView.isScrollEnabled = fitting > Self.maxInputHeight
+        
+        inputHeightConstraint?.update(offset: clamped)
+        UIView.animate(withDuration: 0.15) {
+            self.view.layoutIfNeeded()
+        }
+        
     }
     
     private func makeLayout() -> UICollectionViewLayout {
@@ -146,6 +195,9 @@ final class ChatViewController: UIViewController {
             switch item {
             case .message(let message):
                 return collectionView.dequeueConfiguredReusableCell(using: messageCell, for: indexPath, item: message)
+            case .streaming:
+                let text = self.viewModel.streamingText ?? ""
+                return collectionView.dequeueConfiguredReusableCell(using: retryCell, for: indexPath, item: text)
             case .retryHint:
                 return collectionView.dequeueConfiguredReusableCell(using: retryCell, for: indexPath, item: "ohno，刚刚走神了，能在跟我说一遍吗")
             }
@@ -153,33 +205,57 @@ final class ChatViewController: UIViewController {
     }
         
     private var showsRetry = false
+    
+    private var lastStreamRenderAt: CFTimeInterval = 0
         
     private func applySnapshot(animated: Bool = true) {
         var snapshot = NSDiffableDataSourceSnapshot<Section, Item>()
         snapshot.appendSections([.main])
         snapshot.appendItems(viewModel.messages.map {.message($0)})
+        if viewModel.streamingText != nil {
+            snapshot.appendItems([.streaming])
+        }
         if showsRetry { snapshot.appendItems([.retryHint])}
         dataSource.apply(snapshot, animatingDifferences: animated)
         scrollToBottom()
     }
     
-    private func scrollToBottom() {
+    //每个delta都会调用，但界面最多~60ms刷一次（节流，保护主线程
+    private func onStreamDelta() {
+        let now = CACurrentMediaTime()
+        guard now - lastStreamRenderAt >= 0.06  else { return }
+        lastStreamRenderAt = now
+        
+        var snapshot = dataSource.snapshot()
+        if snapshot.itemIdentifiers.contains(.streaming) {
+            snapshot.reconfigureItems([.streaming])
+            dataSource.apply(snapshot, animatingDifferences: false)
+            scrollToBottom(animated: false)
+        } else {
+            applySnapshot(animated: false)
+        }
+        
+    }
+    
+    
+    private func scrollToBottom(animated: Bool = true) {
         let count = collectionView.numberOfItems(inSection: 0)
         guard count > 0 else { return }
-        collectionView.scrollToItem(at: IndexPath(item: count - 1, section: 0), at: .bottom, animated: true)
+        collectionView.scrollToItem(at: IndexPath(item: count - 1, section: 0), at: .bottom, animated: animated)
     }
     
     //MARK: - 发送 /重试
     
     @objc private func sendTapped() {
-        let text = inputField.text ?? ""
+        let text = inputTextView.text ?? ""
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
               !isWaitingReply else { return }
-        inputField.text = ""
-        
+        inputTextView.text = ""
+        inputPlaceholder.isHidden = false
+        updateInputHeight()
         Task {
             await requestRound {
-                try await self.viewModel.send(text)
+                try await self.viewModel.send(text, onDelta: { self.onStreamDelta()})
             }
         }
         
@@ -189,7 +265,7 @@ final class ChatViewController: UIViewController {
         guard !isWaitingReply else { return }
         Task {
             await requestRound {
-                try await self.viewModel.retry()
+                try await self.viewModel.retry(onDelta: { self.onStreamDelta() })
             }
         }
     }
@@ -199,6 +275,7 @@ final class ChatViewController: UIViewController {
         showsRetry = false
         isWaitingReply = true
         applySnapshot()
+        slimeView.startTalking()
         
         do {
             _ = try await round()
@@ -207,6 +284,7 @@ final class ChatViewController: UIViewController {
             print("聊天请求失败\(error)")
             showsRetry = true
         }
+        slimeView.stopTalking()
         isWaitingReply = false
         applySnapshot()
     }
@@ -240,5 +318,11 @@ extension ChatViewController: UITextFieldDelegate {
     func textFieldShouldReturn(_ textField: UITextField) -> Bool {
         sendTapped()
         return false
+    }
+}
+extension ChatViewController: UITextViewDelegate {
+    func textViewDidChange(_ textView: UITextView) {
+        inputPlaceholder.isHidden = !textView.text.isEmpty
+        updateInputHeight()
     }
 }

@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		C5365C492FFAAF3800B523AC /* SnapKit in Frameworks */ = {isa = PBXBuildFile; productRef = C5365C482FFAAF3800B523AC /* SnapKit */; };
+		C5B7E3053030485300A39339 /* RiveRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = C5B7E3043030485300A39339 /* RiveRuntime */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -41,6 +42,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C5365C492FFAAF3800B523AC /* SnapKit in Frameworks */,
+				C5B7E3053030485300A39339 /* RiveRuntime in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -84,6 +86,7 @@
 			name = Slime;
 			packageProductDependencies = (
 				C5365C482FFAAF3800B523AC /* SnapKit */,
+				C5B7E3043030485300A39339 /* RiveRuntime */,
 			);
 			productName = Slime;
 			productReference = C5365BF92FF904FD00B523AC /* Slime.app */;
@@ -115,6 +118,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				C5365C472FFAAF3800B523AC /* XCRemoteSwiftPackageReference "SnapKit" */,
+				C5B7E3033030485300A39339 /* XCRemoteSwiftPackageReference "rive-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = C5365BFA2FF904FD00B523AC /* Products */;
@@ -362,6 +366,14 @@
 				minimumVersion = 6.0.0;
 			};
 		};
+		C5B7E3033030485300A39339 /* XCRemoteSwiftPackageReference "rive-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/rive-app/rive-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 6.23.1;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -369,6 +381,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = C5365C472FFAAF3800B523AC /* XCRemoteSwiftPackageReference "SnapKit" */;
 			productName = SnapKit;
+		};
+		C5B7E3043030485300A39339 /* RiveRuntime */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = C5B7E3033030485300A39339 /* XCRemoteSwiftPackageReference "rive-ios" */;
+			productName = RiveRuntime;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

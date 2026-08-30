@@ -23,6 +23,7 @@ extension Post {
     @NSManaged public var id: UUID
     @NSManaged public var emotion: String
     @NSManaged public var reply: String?
+    @NSManaged public var dayKey: Date?
 }
 
 extension Post : Identifiable {

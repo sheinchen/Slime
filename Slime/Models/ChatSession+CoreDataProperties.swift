@@ -20,8 +20,10 @@ extension ChatSession {
 
     @NSManaged public var id: UUID
     @NSManaged public var createdAt: Date
-    @NSManaged public var careMessageId: UUID
+    @NSManaged public var careMessageId: UUID?
     @NSManaged public var messages: NSSet?
+    @NSManaged public var title: String?
+    @NSManaged public var updatedAt: Date
 
 }
 

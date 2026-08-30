@@ -40,7 +40,7 @@ final class ComposeViewModel {
                 await careEngine.handle(.postSaved)
             }
         }
-        return SlimeItem(id: post.id, content: post.content, createdAt: post.createdAt, emotion: analysis.emotion,reply: post.reply)
+        return SlimeItem(id: post.id, content: post.content, createdAt: post.createdAt, emotion: analysis.emotion,reply: post.reply, dayKey: post.dayKey)
     }
 }
 

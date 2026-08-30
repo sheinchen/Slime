@@ -18,6 +18,11 @@ final class ComposeViewController: UIViewController {
     private let careViewModel: CareViewModel
     private var careBubble: CareBubbleView?
     
+    var backdropImage: UIImage?
+
+    
+    var onClose: (() -> Void)?
+    
     init(viewModel: ComposeViewModel, careViewModel: CareViewModel) {
         self.viewModel = viewModel
         self.careViewModel = careViewModel
@@ -29,17 +34,63 @@ final class ComposeViewController: UIViewController {
     }
     
     // MARK: - UI 控件
-
-    /// 多行输入框。
-    private let textView: UITextView = {
+    
+    private let backdrop: UIImageView = {
+        let v = UIImageView()
+        v.contentMode = .scaleAspectFill
+        v.isUserInteractionEnabled = true
+        return v
+    }()
+    
+    private let scrim: UIView = {
+        let v = UIView()
+        v.backgroundColor = UIColor(hex: 0xFDFBF4).withAlphaComponent(0.26)
+        v.isUserInteractionEnabled = false
+        return v
+    }()
+    
+    private let cardShadow: UIView = {
+        let v = UIView()
+        v.backgroundColor = .clear
+        v.layer.shadowColor = UIColor(hex: 0x6B5B45).cgColor
+        v.layer.shadowOpacity = 0.14
+        v.layer.shadowRadius = 30
+        v.layer.shadowOffset = CGSize(width: 0, height: 14)
+        return v
+    }()
+    
+    private let card: UIVisualEffectView = {
+        let v = UIVisualEffectView(effect: UIBlurEffect(style: .systemThickMaterial))
+        v.layer.cornerRadius = 28
+        v.layer.cornerCurve = .continuous
+        
+        v.clipsToBounds = true
+        v.layer.borderWidth = 1
+        v.layer.borderColor = UIColor.white.withAlphaComponent(0.55).cgColor
+        return v
+    }()
+    
+    private let cardTint: UIView = {
+        let v = UIView()
+        v.backgroundColor = UIColor.white.withAlphaComponent(0.52)
+        v.isUserInteractionEnabled = false
+        return v
+    }()
+    
+    private let dateLabel = UILabel()
+    
+    private let textView: UITextView  = {
         let tv = UITextView()
-        tv.font = .systemFont(ofSize: 18)
-        tv.textColor = .label
-        tv.backgroundColor = .secondarySystemBackground
-        tv.layer.cornerRadius = 12
-        tv.textContainerInset = UIEdgeInsets(top: 16, left: 12, bottom: 16, right: 12)
+        tv.font  = Kai.font(19)
+        tv.textColor = Sky.ink
+        tv.backgroundColor = .clear
+        tv.textContainerInset = .zero
+        tv.textContainer.lineFragmentPadding = 0
+        tv.keyboardDismissMode = .interactive
         return tv
     }()
+
+
 
     /// 占位提示文字(叠在输入框上模拟 placeholder)。
     private let placeholderLabel: UILabel = {
@@ -48,6 +99,15 @@ final class ComposeViewController: UIViewController {
         label.font = .systemFont(ofSize: 18)
         label.textColor = .tertiaryLabel
         return label
+    }()
+    
+    private let generateButton: UIButton = {
+        let b = UIButton(type: .system)
+        b.setAttributedTitle(Kai.attributed("下 蛋", size: 17, color: Sky.ink(0.75), kern: 2), for: .normal)
+        b.backgroundColor = UIColor.white.withAlphaComponent(0.75)
+        b.layer.cornerRadius = 24
+        b.layer.cornerCurve = .continuous
+        return b
     }()
 
     /// 生成时中央出现的史莱姆,复用 SlimeView 组件。平时隐藏。
@@ -72,70 +132,121 @@ final class ComposeViewController: UIViewController {
 
     override func viewDidLoad() {
         super.viewDidLoad()
-        setupNavigationBar()
+        view.backgroundColor = .clear
         setupUI()
         textView.delegate = self
+        generateButton.addTarget(self, action: #selector(generateTapped), for: .touchUpInside)
+        
+        //点糊掉区域=关掉浮窗
+        backdrop.image = backdropImage
+        backdrop.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(closeTapped)))
+      
     }
 
-    // 每次要显示时都回到"输入模式"(比如从广场返回后,重置成能继续写)
+    
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         resetToInputMode()
+        cardShadow.transform = CGAffineTransform(translationX: 0, y: 46).scaledBy(x: 0.94, y: 0.94)
+        cardShadow.alpha = 0
+        generateButton.alpha = 0
+        
     }
 
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
         // 只有输入模式才自动弹键盘
-        if slimeView.isHidden {
-            textView.becomeFirstResponder()
+        UIView.animate(withDuration: 0.5, delay: 0.04, usingSpringWithDamping: 0.82, initialSpringVelocity: 0.2) {
+            self.cardShadow.transform = .identity
+            self.cardShadow.alpha = 1
+            self.generateButton.alpha = 1
         }
         //主动关心
-        presentCareIfNeeded()
+       // presentCareIfNeeded()
     }
 
     // MARK: - 搭建 UI
 
-    private func setupNavigationBar() {
-        title = "写点什么"
-        navigationItem.rightBarButtonItem = UIBarButtonItem(
-            title: "生成", style: .done, target: self, action: #selector(generateTapped)
-        )
-        navigationItem.leftBarButtonItem = UIBarButtonItem(
-            title: "广场", style: .plain, target: self, action: #selector(squareTapped)
-        )
-    }
+  
 
     private func setupUI() {
-        view.backgroundColor = .systemBackground
-        view.addSubview(textView)
-        textView.addSubview(placeholderLabel)
+        view.addSubview(backdrop)
+        view.addSubview(scrim)
+        view.addSubview(cardShadow)
+        cardShadow.addSubview(card)
+        // 内容必须加到 contentView,不能直接加到 UIVisualEffectView 上 ——
+        // 后者是给系统的效果层用的,直接塞会有渲染异常。
+        card.contentView.addSubview(cardTint)
+        card.contentView.addSubview(dateLabel)
+        card.contentView.addSubview(textView)
+        card.contentView.addSubview(placeholderLabel)
+        view.addSubview(generateButton)
         view.addSubview(slimeView)
         view.addSubview(replyLabel)
 
+        dateLabel.attributedText = Kai.attributed(todayTitle(), size: 15, color: Sky.ink(0.45))
+        placeholderLabel.attributedText = Kai.attributed("今天……", size: 19, color: Sky.ink(0.28))
+
+        backdrop.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+        cardShadow.snp.makeConstraints { make in
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(100)
+            make.leading.trailing.equalToSuperview().inset(26)
+            make.bottom.equalTo(generateButton.snp.top).offset(-28)
+            make.height.lessThanOrEqualTo(360)
+        }
+        card.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+        cardTint.snp.makeConstraints { make in
+            make.edges.equalToSuperview()
+        }
+        dateLabel.snp.makeConstraints { make in
+            make.top.equalToSuperview().offset(26)
+            make.leading.equalToSuperview().offset(26)
+        }
         textView.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(16)
-            make.leading.trailing.equalToSuperview().inset(16)
-            make.height.equalTo(240)
+            make.top.equalTo(dateLabel.snp.bottom).offset(26)
+            make.leading.trailing.equalToSuperview().inset(26)
+            make.bottom.equalToSuperview().offset(-26)
         }
         placeholderLabel.snp.makeConstraints { make in
-            make.top.equalToSuperview().offset(16)
-            make.leading.equalToSuperview().offset(16)
+            make.top.leading.equalTo(textView)
         }
+        generateButton.snp.makeConstraints { make in
+            make.centerX.equalToSuperview()
+            make.bottom.equalTo(view.keyboardLayoutGuide.snp.top).offset(-24)
+            make.width.equalTo(132)
+            make.height.equalTo(48)
+        }
+        
         slimeView.snp.makeConstraints { make in
-            make.center.equalToSuperview()
-            make.width.height.equalTo(180)
-        }
+               make.center.equalToSuperview()
+               make.width.height.equalTo(180)
+           }
+
         replyLabel.snp.makeConstraints { make in
             make.top.equalTo(slimeView.snp.bottom).offset(16)
             make.leading.trailing.equalToSuperview().inset(32)
         }
+
     }
 
+    /// "八月十六日 · 星期日"
+    private func todayTitle() -> String {
+        let names = ["日", "一", "二", "三", "四", "五", "六"]
+        let index = Calendar.current.component(.weekday, from: Date()) - 1
+        return ChineseDate.title() + "日 · 星期" + names[index]
+    }
+    
     // MARK: - 交互
 
-    // 直接去广场(不生成)
-    @objc private func squareTapped() {
-        navigationController?.pushViewController(SquareViewController(), animated: true)
+    @objc private func closeTapped() {
+        guard slimeView.isHidden else { return }
+        textView.resignFirstResponder()
+        onClose?()
+        dismiss(animated: true)
     }
 
     // 生成:先出未定形并凝结(乐观 UI)→ 后台调 AI → 拿到真实情绪再揭晓 → 走进广场
@@ -161,8 +272,8 @@ final class ComposeViewController: UIViewController {
                 slimeView.reveal(to: item.emotion) { [weak self] in
                     guard let self else { return }
                     self.showReply(item.reply)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
-                        self.goToSquare()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
+                        self?.goToSquare()
                     }
                 }
             } catch {
@@ -187,7 +298,7 @@ final class ComposeViewController: UIViewController {
         replyLabel.isHidden = true
         textView.isHidden = false
         placeholderLabel.isHidden = !(textView.text ?? "").isEmpty
-        navigationItem.rightBarButtonItem?.isEnabled = true
+        generateButton.isEnabled = true
 
         let alert = UIAlertController(
             title: "分析失败",
@@ -208,7 +319,8 @@ final class ComposeViewController: UIViewController {
     }
 
     private func goToSquare() {
-        navigationController?.pushViewController(SquareViewController(), animated: true)
+        onClose?()
+        dismiss(animated: true)
     }
     
     //MARK: - 主动过关心出现
@@ -232,16 +344,16 @@ final class ComposeViewController: UIViewController {
 //            self?.careBubble?.removeFromSuperview()
 //            self?.careBubble = nil
         }
-        bubble.onChat = { [weak self] in
-            guard let self else { return }
-            self.careViewModel.markAccepted(care)
-//            self.careBubble?.removeFromSuperview()
-//            self.careBubble = nil
-            let chatVM = ChatViewModel(care: care, chatRepo: CoreDataChatRepository(), posts: CoreDataPostRepository(), aiService: DeepSeekAIService())
-            
-            self.navigationController?.pushViewController(ChatViewController(viewModel: chatVM), animated: true)
-            
-        }
+//        bubble.onChat = { [weak self] in
+//            guard let self else { return }
+//            self.careViewModel.markAccepted(care)
+////            self.careBubble?.removeFromSuperview()
+////            self.careBubble = nil
+//            let chatVM = ChatViewModel(care: care, chatRepo: CoreDataChatRepository(), posts: CoreDataPostRepository(), aiService: DeepSeekAIService())
+//            
+//            self.navigationController?.pushViewController(ChatViewController(viewModel: chatVM), animated: true)
+//            
+//        }
         
         careBubble = bubble
         bubble.playEntrance()
@@ -256,13 +368,17 @@ final class ComposeViewController: UIViewController {
         placeholderLabel.isHidden = true
         replyLabel.isHidden = true
         slimeView.isHidden = false
-        navigationItem.rightBarButtonItem?.isEnabled = false   // 孵化中禁止再点生成
+        cardShadow.isHidden = true
+        generateButton.isHidden = true
+        generateButton.isEnabled = false   // 孵化中禁止再点生成
     }
 
     private func resetToInputMode() {
         slimeView.isHidden = true
         replyLabel.isHidden = true
         textView.isHidden = false
+        cardShadow.isHidden = false
+        generateButton.isHidden = false
         textView.text = ""
         placeholderLabel.isHidden = false
         navigationItem.rightBarButtonItem?.isEnabled = true

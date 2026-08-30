@@ -24,6 +24,15 @@ struct ChatMessageItem: Hashable {
 //一个会话基本信息
 struct ChatSessionInfo {
     let id: UUID
-    let careMessageId: UUID
+    let careMessageId: UUID?
     let createdAt: Date
+    let title: String?
+    let updatedAt: Date
+}
+
+//聊天入口
+enum ChatOrigin {
+    case direct
+    case care(PendingCare)
+    case resume(ChatSessionInfo)
 }

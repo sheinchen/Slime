@@ -29,6 +29,7 @@ final class CoreDataPostRepository: PostRepository {
         post.id = UUID()
         post.content = content
         post.createdAt = Date()
+        post.dayKey = Calendar.current.startOfDay(for: post.createdAt)
         post.emotion = emotion.rawValue
         post.reply = reply
         saveIfNeeded() //落盘

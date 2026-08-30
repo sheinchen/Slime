@@ -11,54 +11,113 @@ import Foundation
 final class ChatViewModel {
     
     //MARK: - 依赖与状态
-    private let care: PendingCare
+    private let origin: ChatOrigin
     private let chatRepo: ChatRepository
     private let posts: PostRepository
     private let aiService: AIService
     
-    private(set) var session: ChatSessionInfo
+    private var session: ChatSessionInfo?
     private(set) var messages: [ChatMessageItem] = []
     
     //上下文先带N轮
     private static let maxHistoryTurns = 10
     
-    init(care: PendingCare, chatRepo: ChatRepository, posts: PostRepository, aiService: AIService) {
-        self.care = care
+    //正在流的部分回复
+    private(set) var streamingText: String?
+    
+    init(origin: ChatOrigin, chatRepo: ChatRepository, posts: PostRepository, aiService: AIService) {
+        self.origin = origin
         self.chatRepo = chatRepo
         self.posts = posts
         self.aiService = aiService
-        //同一条关心->同一个会话 历史消息直接恢复
-        self.session = chatRepo.findOrCreatedSession(careMessageId: care.id, now: Date())
-        self.messages = chatRepo.messages(sessionId: session.id)
-        if messages.isEmpty {
-            let opening = chatRepo.append(sessionId: session.id, role: .slime, content: care.text, at: Date())
-            messages.append(opening)
+        
+        switch origin {
+        case .direct:
+            messages = [ChatMessageItem(id: UUID(), role: .slime, content: HenGreeting.random(), createdAt: Date())]
+        case .care(let care):
+            messages = [ChatMessageItem(id: UUID(), role: .slime, content: care.text, createdAt: Date())]
+        case .resume(let existing):
+            session = existing
+            messages = chatRepo.messages(sessionId: existing.id)
         }
+       
+    }
+    
+    @discardableResult
+    private func ensureSession() -> ChatSessionInfo {
+        if let session { return session }
+        let created = chatRepo.createSession(careMessageId: newSessionCareId, now: Date())
+        session = created
+        for m in messages {
+            chatRepo.append(sessionId: created.id, role: m.role, content: m.content, at: m.createdAt)
+        }
+        return created
+    }
+    
+    //判断新会话是不是主动关心会话
+    private var newSessionCareId: UUID? {
+        if case .care(let care) = origin { return care.id }
+        return nil
     }
     
     //MARK: - 对外动作
-    /// 发送用户消息:先落库(立刻上屏、失败也不丢),再要回复。
-    /// 返回史莱姆的回复;抛错时用户消息已保存,UI 显示重试即可。
-    func send(_ text: String) async throws -> ChatMessageItem {
+    func send(_ text: String, onDelta: @MainActor @escaping () -> Void) async throws -> ChatMessageItem {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { throw AIError.emptyContent}
         
-        let userMessage = chatRepo.append(sessionId: session.id, role: .user, content: trimmed, at: Date())
+        let isFirstUserMessage = !messages.contains { $0.role == .user }
+        
+        let s = ensureSession()
+        
+        let userMessage = chatRepo.append(sessionId: s.id, role: .user, content: trimmed, at: Date())
         messages.append(userMessage)
-        return try await requestReply()
+        
+        if isFirstUserMessage {
+            chatRepo.updateTitle(sessionId: s.id, title: String(trimmed.prefix(14)))
+        }
+
+        
+        return try await streamReply(sessionId: s.id, onDelta: onDelta)
     }
     
-    func retry() async throws -> ChatMessageItem {
-        try await requestReply()
+    func retry(onDelta: @MainActor @escaping () -> Void) async throws -> ChatMessageItem {
+        guard let session else { throw AIError.emptyContent }
+        return try await streamReply(sessionId: session.id, onDelta: onDelta)
     }
     
-    //MARK: - 上下文组装
-    private func requestReply() async throws -> ChatMessageItem {
-        let reply = try await aiService.chat(messages: buildContext())
-        let slimeMessage = chatRepo.append(sessionId: session.id, role: .slime, content: reply, at: Date())
+    //MARK: - 流式上下文组装
+    private func streamReply(sessionId: UUID, onDelta: @MainActor @escaping () -> Void) async throws -> ChatMessageItem {
+        streamingText = ""
+        onDelta() // 先立一个空气泡
+        
+        var accumulated = ""
+        do {
+            // 循环体在主线程，所以更新状态和回调UI安全
+            for try await piece in aiService.chatstream(messages: buildContext()) {
+                accumulated += piece
+                streamingText = accumulated
+                onDelta()
+            }
+        } catch {
+            streamingText = nil
+            if !accumulated.isEmpty {
+                let partial = chatRepo.append(sessionId: sessionId, role: .slime, content: accumulated, at: Date())
+                messages.append(partial)
+            }
+            throw error
+        }
+        
+        streamingText = nil
+        let full = accumulated.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !full.isEmpty else { throw AIError.emptyContent }
+        
+        let slimeMessage = chatRepo.append(sessionId: sessionId, role: .slime, content: full, at: Date())
         messages.append(slimeMessage)
         return slimeMessage
     }
+    
+    
+    
     
     /// 按固定顺序组装:①人设+行为约束 ②触发语境 ③最近 N 轮历史(含刚发的用户消息)
     private func buildContext() -> [AIChatMessage] {
@@ -66,7 +125,7 @@ final class ChatViewModel {
         
         result.append(AIChatMessage(
             role: "system",
-            content: DeepSeekAIService.chatSystemPrompt + "\n\n" + triggerContext()))
+            content: systemContext()))
         
         let recent = messages.suffix(Self.maxHistoryTurns * 2)
         for m in recent {
@@ -77,9 +136,21 @@ final class ChatViewModel {
         return result
     }
     
+    private func systemContext() -> String {
+        switch origin {
+        case .direct:
+            return DeepSeekAIService.chatSystemPrompt
+        case .care(let care):
+            return DeepSeekAIService.chatSystemPrompt + "\n\n" + triggerContext(care)
+        case .resume:
+            return DeepSeekAIService.chatSystemPrompt
+            
+        }
+    }
+    
     /// 触发语境:这次关心的开场白 + 触发时用户的那几篇帖子(内容+情绪)。
     /// 帖子按"创建时间 ≤ 关心创建时间"查最近 3 篇 —— 正是触发那一刻规则看到的窗口。
-    private func triggerContext() -> String {
+    private func triggerContext(_ care: PendingCare) -> String {
         let window = posts.fetchAll().filter {
             $0.createdAt <= care.createdAt
         }.prefix(3)
