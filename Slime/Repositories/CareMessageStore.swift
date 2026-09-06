@@ -8,102 +8,92 @@
 import CoreData
 
 protocol CareMessageStore {
-    //当前该展示
-    func active(now: Date) -> PendingCare?
-    //存新的 返回被忽略的ruleId 交给引擎
-    @discardableResult
-    func save(ruleId: String, text: String, now: Date) -> [String]
-    
-    //清理超时未处理 返回被忽略的ruleId
-    @discardableResult
-    func sweepExpired(now: Date) -> [String]
-    
-    func updateStatus(id: UUID, to status: CareStatus)
+    /// 当前挂着的那条。**纯查 status，不做时间判断** ——
+    /// 该不该退场是引擎的事：两条退场规则要跨表看蛋，仓库的谓词表达不了。
+    func active() -> PendingCare?
+
+    /// 落库一条新关怀。生成即展示，所以叫 show 不叫 save。
+    /// referencedDates 只进库（第 8 步靠它沉淀回那几天的蛋），**不给 UI**。
+    func show(text: String, referencedDates: [Date], now: Date)
+
+    /// 让当前挂着的那条退场在 `date` 这一刻。没有挂着的就什么都不做。
+    func retire(at date: Date)
+
+    /// 冷却期的锚点：最新一条已退场关怀的退场时刻。
+    func lastRetiredAt() -> Date?
 }
 
+
+
 final class CoreDataCareMessageStore: CareMessageStore {
-    //关心时效
-    private static let validity: TimeInterval = 3 * 24 * 60 * 60
-    
-    private let context: NSManagedObjectContext
+    /// 关怀挂 3 天。这个数同时是「内容保质期」和「露面次数上限」，不要放大。
+      private static let validity: TimeInterval = 3 * 24 * 60 * 60
+
+      private let context: NSManagedObjectContext
     
     init(context: NSManagedObjectContext = CoreDataStack.shared.viewContext) {
         self.context = context
     }
     
-    func active(now: Date) -> PendingCare? {
-        let request = CareMessage.fetchRequest()
-        let earliest = now.addingTimeInterval(-Self.validity)
-        request.predicate = NSPredicate(
-            format: "(status == %@ OR status == %@) AND createdAt >= %@", CareStatus.pending.rawValue,CareStatus.shown.rawValue, earliest as NSDate
-        )
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \CareMessage.createdAt, ascending: false)]
-        request.fetchLimit = 1
-        
-        guard let e = try? context.fetch(request).first else { return nil}
-        return PendingCare(id: e.id, ruleId: e.ruleId, text: e.text, createdAt: e.createdAt)
-    }
+    func active() -> PendingCare? {
+          let request = CareMessage.fetchRequest()
+          request.predicate = NSPredicate(format: "status == %@", CareStatus.shown.rawValue)
+          request.sortDescriptors = [NSSortDescriptor(keyPath: \CareMessage.createdAt, ascending: false)]
+          request.fetchLimit = 1
+          guard let e = try? context.fetch(request).first else { return nil }
+          return PendingCare(id: e.id, text: e.text, createdAt: e.createdAt)
+      }
     
-    @discardableResult
-    func save(ruleId: String, text: String, now: Date) -> [String] {
-        //仲裁：先收尾旧记录，保证只有一条等着被看
-        let ignoredRuleIds = closeOut(activeEntities(olderThan: nil))
-        
-        let e = CareMessage(context: context)
-        e.id = UUID()
-        e.ruleId = ruleId
-        e.text = text
-        e.createdAt = now
-        e.status = CareStatus.pending.rawValue
-        saveIfNeeded()
-        return ignoredRuleIds
-    }
+    func show(text: String, referencedDates: [Date], now: Date) {
+            // 仲裁：先把还挂着的收掉，保证同时只有一条 shown。
+            // 正常走不到这儿（闸门第 0 条已经挡了），是防御。
+            shownEntities().forEach { retire($0, at: now) }
+
+            let e = CareMessage(context: context)
+            e.id = UUID()
+            e.ruleId = ""                       // v2 没有规则了；字段留着不迁移，写空
+            e.text = text
+            e.createdAt = now
+            e.status = CareStatus.shown.rawValue
+            e.referencedDates = Self.encode(referencedDates)
+            saveIfNeeded()
+        }
     
-    @discardableResult
-    func sweepExpired(now: Date) -> [String] {
-        let deadline = now.addingTimeInterval(-Self.validity)
-        let ignoredRuleIds = closeOut(activeEntities(olderThan: deadline))
-        saveIfNeeded()
-        return ignoredRuleIds
-    }
+    func retire(at date: Date) {
+          shownEntities().forEach { retire($0, at: date) }
+          saveIfNeeded()
+      }
     
-    func updateStatus(id: UUID, to status: CareStatus) {
-        let request = CareMessage.fetchRequest()
-        request.predicate = NSPredicate(format: "id = %@", id as CVarArg)
-        request.fetchLimit = 1
-        guard let e = try? context.fetch(request).first else { return }
-        e.status = status.rawValue
-        saveIfNeeded()
-    }
+    func lastRetiredAt() -> Date? {
+         let request = CareMessage.fetchRequest()
+         request.predicate = NSPredicate(format: "retiredAt != nil")
+         request.sortDescriptors = [NSSortDescriptor(keyPath: \CareMessage.retiredAt, ascending: false)]
+         request.fetchLimit = 1
+         return (try? context.fetch(request))?.first?.retiredAt
+     }
+    
+ 
     
      
     //MARK: - 私有
-    private func activeEntities(olderThan date: Date?) -> [CareMessage] {
-        let request = CareMessage.fetchRequest()
-        if let date {
-            request.predicate = NSPredicate(format: "(status == %@ OR status == %@) AND createdAt < %@", CareStatus.pending.rawValue, CareStatus.shown.rawValue, date as NSDate)
-        } else {
-            request.predicate = NSPredicate(format: "(status == %@ OR status == %@)", CareStatus.pending.rawValue, CareStatus.shown.rawValue)
-        }
-        return (try? context.fetch(request)) ?? []
-    }
+    private func shownEntities() -> [CareMessage] {
+          let request = CareMessage.fetchRequest()
+          request.predicate = NSPredicate(format: "status == %@", CareStatus.shown.rawValue)
+          return (try? context.fetch(request)) ?? []
+      }
     
+    private func retire(_ e: CareMessage, at date: Date) {
+          e.status = CareStatus.retired.rawValue
+          e.retiredAt = date
+      }
     
-    // 给一批记录收尾:
-    // - `shown`(露过面却没点开)→ 判为 ignored,返回它的 ruleId
-    // - `pending`(用户压根没见过)→ 不算被忽略,直接删掉,不冤枉这条规则
-    private func closeOut(_ entities: [CareMessage]) -> [String] {
-        var ignoredRuleIds: [String] = []
-        for e in entities {
-            if e.status == CareStatus.shown.rawValue {
-                e.status = CareStatus.ignored.rawValue
-                ignoredRuleIds.append(e.ruleId)
-            } else {
-                context.delete(e)
-            }
-        }
-        return ignoredRuleIds
-    }
+    private static func encode(_ dates: [Date]) -> String {
+          let f = ISO8601DateFormatter()
+          f.formatOptions = [.withFullDate]
+          return dates.map { f.string(from: $0) }.joined(separator: ",")
+      }
+    
+
     
     private func saveIfNeeded() {
         guard context.hasChanges else { return }
@@ -114,7 +104,7 @@ final class CoreDataCareMessageStore: CareMessageStore {
         }
     }
     
-    }
+}
 
     
     

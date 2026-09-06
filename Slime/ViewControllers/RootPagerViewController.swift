@@ -11,6 +11,12 @@ import SnapKit
 //分页容器的一页，负责告诉现在是不是当前页
 protocol PagerPage: UIViewController {
     func pageVisibilityDidChange(isCurrent: Bool)
+    func dataDidChange()
+}
+extension PagerPage {
+    func dataDidChange() {
+        
+    }
 }
 
 final class RootPagerViewController: UIViewController {
@@ -127,6 +133,12 @@ final class RootPagerViewController: UIViewController {
     private func notifyPageVisibility() {
         for (index, page) in pages.enumerated() {
             (page as? PagerPage)?.pageVisibilityDidChange(isCurrent: index == currentIndex)
+        }
+    }
+    
+    func broadcastDataChange() {
+        for page in pages {
+            (page as? PagerPage)?.dataDidChange()
         }
     }
 }

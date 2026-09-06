@@ -62,3 +62,56 @@ extension UIColor {
         )
     }
 }
+
+/// 聊天页的配色。整屏只有母鸡和一串气泡，所以色带比别处更克制：
+/// 两条（母鸡一条、你一条），各自从「实」渐到「几乎是背景色」。
+enum ChatPalette {
+    /// 页面底色，比首页天光更暖一点，衬得住满屏的黄
+    static let background = UIColor(hex: 0xFDF8EA)
+
+    /// 母鸡说的话：奶黄。near = 最新那条，far = 快飘出视野那条
+    static let henNear = UIColor(hex: 0xFBE7AE)
+    static let henFar = UIColor(hex: 0xFDF7E2)
+
+    /// 你说的话：更饱和的橙黄，一眼能和她的分开
+    static let userNear = UIColor(hex: 0xF9C95E)
+    static let userFar = UIColor(hex: 0xFCEDC6)
+
+    static let text = UIColor(hex: 0x5A4A33)
+    static let textSoft = UIColor(hex: 0x9A8B72)
+
+    /// 输入条
+    static let inputField = UIColor(hex: 0xFFFFFF, alpha: 0.72)
+    static let inputHint = UIColor(hex: 0xB5A98F)
+
+    /// 颜色只由「离最新消息多远」决定 —— 不是 index/total。
+    ///
+    /// 按 index/total 算的话，每来一条新消息，所有旧气泡的颜色都要重算，
+    /// 整屏会闪一下。按深度算，新消息进来时旧的是**渐渐褪色往上飘**，
+    /// 这个变化本身有意义，也和顶部那层渐隐是同一套语言。
+    ///
+    /// depthSpan 条之外就全部淡到底，不再继续变。
+    static func bubble(role: ChatRole, depth: Int) -> UIColor {
+        let t = min(CGFloat(depth) / CGFloat(depthSpan), 1)
+        let near = role == .user ? userNear : henNear
+        let far = role == .user ? userFar : henFar
+        return near.blended(to: far, t: t)
+    }
+
+    private static let depthSpan = 5
+}
+
+extension UIColor {
+    /// 在两个颜色之间线性插值。t=0 全是自己，t=1 全是 other。
+    func blended(to other: UIColor, t: CGFloat) -> UIColor {
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        other.getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        let k = max(0, min(1, t))
+        return UIColor(red: r1 + (r2 - r1) * k,
+                       green: g1 + (g2 - g1) * k,
+                       blue: b1 + (b2 - b1) * k,
+                       alpha: a1 + (a2 - a1) * k)
+    }
+}

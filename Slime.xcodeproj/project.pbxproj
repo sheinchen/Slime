@@ -11,8 +11,19 @@
 		C5B7E3053030485300A39339 /* RiveRuntime in Frameworks */ = {isa = PBXBuildFile; productRef = C5B7E3043030485300A39339 /* RiveRuntime */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		C5FF01EB304ACD6300F8F5CA /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = C5365BF12FF904FD00B523AC /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = C5365BF82FF904FD00B523AC;
+			remoteInfo = Slime;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		C5365BF92FF904FD00B523AC /* Slime.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Slime.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C5FF01E7304ACD6300F8F5CA /* SlimeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SlimeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -34,6 +45,11 @@
 			path = Slime;
 			sourceTree = "<group>";
 		};
+		C5FF01E8304ACD6300F8F5CA /* SlimeTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = SlimeTests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -46,6 +62,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C5FF01E4304ACD6300F8F5CA /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -53,6 +76,7 @@
 			isa = PBXGroup;
 			children = (
 				C5365BFB2FF904FD00B523AC /* Slime */,
+				C5FF01E8304ACD6300F8F5CA /* SlimeTests */,
 				C5365BFA2FF904FD00B523AC /* Products */,
 			);
 			sourceTree = "<group>";
@@ -61,6 +85,7 @@
 			isa = PBXGroup;
 			children = (
 				C5365BF92FF904FD00B523AC /* Slime.app */,
+				C5FF01E7304ACD6300F8F5CA /* SlimeTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -92,6 +117,29 @@
 			productReference = C5365BF92FF904FD00B523AC /* Slime.app */;
 			productType = "com.apple.product-type.application";
 		};
+		C5FF01E6304ACD6300F8F5CA /* SlimeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C5FF01ED304ACD6300F8F5CA /* Build configuration list for PBXNativeTarget "SlimeTests" */;
+			buildPhases = (
+				C5FF01E3304ACD6300F8F5CA /* Sources */,
+				C5FF01E4304ACD6300F8F5CA /* Frameworks */,
+				C5FF01E5304ACD6300F8F5CA /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				C5FF01EC304ACD6300F8F5CA /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				C5FF01E8304ACD6300F8F5CA /* SlimeTests */,
+			);
+			name = SlimeTests;
+			packageProductDependencies = (
+			);
+			productName = SlimeTests;
+			productReference = C5FF01E7304ACD6300F8F5CA /* SlimeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -104,6 +152,10 @@
 				TargetAttributes = {
 					C5365BF82FF904FD00B523AC = {
 						CreatedOnToolsVersion = 26.2;
+					};
+					C5FF01E6304ACD6300F8F5CA = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = C5365BF82FF904FD00B523AC;
 					};
 				};
 			};
@@ -126,12 +178,20 @@
 			projectRoot = "";
 			targets = (
 				C5365BF82FF904FD00B523AC /* Slime */,
+				C5FF01E6304ACD6300F8F5CA /* SlimeTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		C5365BF72FF904FD00B523AC /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		C5FF01E5304ACD6300F8F5CA /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -148,7 +208,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		C5FF01E3304ACD6300F8F5CA /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		C5FF01EC304ACD6300F8F5CA /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = C5365BF82FF904FD00B523AC /* Slime */;
+			targetProxy = C5FF01EB304ACD6300F8F5CA /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		C5365C102FF904FE00B523AC /* Debug */ = {
@@ -334,6 +409,50 @@
 			};
 			name = Release;
 		};
+		C5FF01EE304ACD6300F8F5CA /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54ZWCBP5FX;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shiying.SlimeTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Slime.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Slime";
+			};
+			name = Debug;
+		};
+		C5FF01EF304ACD6300F8F5CA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 54ZWCBP5FX;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.6;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.shiying.SlimeTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Slime.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Slime";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -351,6 +470,15 @@
 			buildConfigurations = (
 				C5365C102FF904FE00B523AC /* Debug */,
 				C5365C112FF904FE00B523AC /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		C5FF01ED304ACD6300F8F5CA /* Build configuration list for PBXNativeTarget "SlimeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				C5FF01EE304ACD6300F8F5CA /* Debug */,
+				C5FF01EF304ACD6300F8F5CA /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

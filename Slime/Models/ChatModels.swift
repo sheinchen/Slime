@@ -14,7 +14,7 @@ enum ChatRole: String {
 }
 
 //一条聊天记录
-struct ChatMessageItem: Hashable {
+nonisolated struct ChatMessageItem: Hashable {
     let id: UUID
     let role: ChatRole
     let content: String

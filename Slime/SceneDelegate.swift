@@ -12,6 +12,9 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     var window: UIWindow?
 
+    private var eggService: DayEggService?
+    private var careEngine: CareEngine?
+    private weak var rootVC: RootPagerViewController?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         // scene 是一个 UIWindowScene(带屏幕的场景),转型失败就不往下走
@@ -22,22 +25,33 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         // 组合根
         let postRepo = CoreDataPostRepository()
-        let cooldowns = CoreDataCooldownStore()
         let careMessages = CoreDataCareMessageStore()
+        let eggStore = CoreDataDayEggStore()
         let aiService = DeepSeekAIService()
+        let eggService = DayEggService(posts: postRepo, eggs: eggStore)
+        
         let chatRepo = CoreDataChatRepository()
         
-        let careEngine = CareEngine(rules: [MoodRecoverRule(), LowMoodStreakRule(), HappyStreakRule()],
-                                    posts: postRepo,
-                                    cooldowns: cooldowns,
+        let careChecks = CoreDataCareCheckStore()
+        let careGate = CareGate(eggs: eggStore,
+                                messages: careMessages,
+                                checks: careChecks)
+        let careEngine = CareEngine(gate: careGate,
+                                    eggs: eggStore,
                                     messages: careMessages,
-                                    openingProvider: aiService)
-        
-        let composeVM = ComposeViewModel(repository: postRepo, aiService: aiService, careEngine: careEngine)
+                                    checks: careChecks)
+
+
+        let composeVM = ComposeViewModel(repository: postRepo, aiService: aiService)
+        let squareVM = SquareViewModel(repository: postRepo, eggService: eggService)
         let homeVC = HomeViewController()
-        homeVC.makeComposeViewController = {  backdrop ,onClose in
-            let vc =  ComposeViewController(viewModel: composeVM, careViewModel: CareViewModel(messages: careMessages, cooldowns: cooldowns))
-            vc.onClose = onClose
+        let rootVC = RootPagerViewController(pages: [homeVC,SquareViewController(viewModel: squareVM)])
+        homeVC.makeComposeViewController = { [weak rootVC] backdrop ,onClose in
+            let vc =  ComposeViewController(viewModel: composeVM)
+            vc.onClose = {
+                onClose()
+                rootVC?.broadcastDataChange()
+            }
             vc.backdropImage = backdrop
             return vc
         }
@@ -46,15 +60,20 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             return ChatViewController(viewModel: vm)
         }
         
-        let rootVC = RootPagerViewController(pages: [homeVC,SquareViewController()])
+      
         let navigationController = UINavigationController(rootViewController: rootVC)
         window.rootViewController = navigationController
-
+        //测试seed
+        #if DEBUG
+        // 只在测试库上生效；正式库会被 DebugSeeder 自己挡掉，不用加判断。
+        DebugSeeder.reset(to: [.sad, .sad, .sad, .calm, .happy], withEggs: true)
+        #endif
         // 3. 让 window 显示出来,并持有它(存到属性里,不然会被释放)
         window.makeKeyAndVisible()
         self.window = window
-        
-        Task { await careEngine.handle(.appOpened)}
+        self.eggService = eggService
+        self.careEngine = careEngine
+        self.rootVC = rootVC
         
     }
 
@@ -66,17 +85,18 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
-        // Called when the scene has moved from an inactive state to an active state.
-        // Use this method to restart any tasks that were paused (or not yet started) when the scene was inactive.
-        //MARK: test
-//        Task {
-//            let vm = SquareViewModel()
-//            vm.loadPosts()
-//            let entries = vm.entries
-//            let summary = try await DeepSeekAIService().summarizeDay(entries)
-//            print("蛋", summary.emotion.rawValue, summary.text)
-//        }
+        Task { await onAppActive() }
     }
+    
+    private func onAppActive() async {
+        if let eggService {
+            let hatched = await eggService.hatchAllPending()
+            if hatched > 0 { rootVC?.broadcastDataChange() }
+        }
+        // ② 再跑关怀
+        await careEngine?.handle(.appOpened)
+    }
+
 
     func sceneWillResignActive(_ scene: UIScene) {
         // Called when the scene will move from an active state to an inactive state.

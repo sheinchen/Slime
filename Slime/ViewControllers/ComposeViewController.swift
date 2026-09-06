@@ -15,17 +15,15 @@ final class ComposeViewController: UIViewController {
     // MARK: - 依赖
 
     private let viewModel: ComposeViewModel
-    private let careViewModel: CareViewModel
-    private var careBubble: CareBubbleView?
+
     
     var backdropImage: UIImage?
 
     
     var onClose: (() -> Void)?
     
-    init(viewModel: ComposeViewModel, careViewModel: CareViewModel) {
+    init(viewModel: ComposeViewModel) {
         self.viewModel = viewModel
-        self.careViewModel = careViewModel
         super.init(nibName: nil, bundle: nil)
     }
     
@@ -103,19 +101,30 @@ final class ComposeViewController: UIViewController {
     
     private let generateButton: UIButton = {
         let b = UIButton(type: .system)
-        b.setAttributedTitle(Kai.attributed("下 蛋", size: 17, color: Sky.ink(0.75), kern: 2), for: .normal)
+        b.setAttributedTitle(Kai.attributed("收 好", size: 17, color: Sky.ink(0.75), kern: 2), for: .normal)
         b.backgroundColor = UIColor.white.withAlphaComponent(0.75)
         b.layer.cornerRadius = 24
         b.layer.cornerCurve = .continuous
         return b
     }()
 
-    /// 生成时中央出现的史莱姆,复用 SlimeView 组件。平时隐藏。
-    private let slimeView: SlimeView = {
-        let v = SlimeView()
-        v.isHidden = true
+    /// 记录时上台的母鸡。载入失败就是 nil ——
+    /// 那时演出降级成「只淡入一行回应」，不崩、也不卡流程。
+    private let henView: RiveHenView? = {
+        let v = RiveHenView.make()
+        v?.isHidden = true
         return v
     }()
+
+    /// 正在记录（母鸡在台上）。
+    /// 以前是拿 slimeView.isHidden 当状态用，但 henView 可能是 nil，
+    /// isHidden 就不再可靠 —— 状态该显式存着。
+    private var isRecording = false
+
+    /// 等她点完头再说的那句话
+    private var pendingReply: String?
+    /// 这一轮的回应有没有送出去。回调和兜底超时谁先到都只算一次。
+    private var didDeliverReply = false
 
     /// 揭晓后在史莱姆下面淡入的一行 AI 回复。平时隐藏。
     private let replyLabel: UILabel = {
@@ -136,6 +145,12 @@ final class ComposeViewController: UIViewController {
         setupUI()
         textView.delegate = self
         generateButton.addTarget(self, action: #selector(generateTapped), for: .touchUpInside)
+
+        // 她点完头，才轮到说话
+        henView?.onClipFinished = { [weak self] clip in
+            guard let self, clip == .nod, self.isRecording else { return }
+            self.deliverReply()
+        }
         
         //点糊掉区域=关掉浮窗
         backdrop.image = backdropImage
@@ -161,8 +176,7 @@ final class ComposeViewController: UIViewController {
             self.cardShadow.alpha = 1
             self.generateButton.alpha = 1
         }
-        //主动关心
-       // presentCareIfNeeded()
+
     }
 
     // MARK: - 搭建 UI
@@ -181,7 +195,7 @@ final class ComposeViewController: UIViewController {
         card.contentView.addSubview(textView)
         card.contentView.addSubview(placeholderLabel)
         view.addSubview(generateButton)
-        view.addSubview(slimeView)
+        if let henView { view.addSubview(henView) }
         view.addSubview(replyLabel)
 
         dateLabel.attributedText = Kai.attributed(todayTitle(), size: 15, color: Sky.ink(0.45))
@@ -221,14 +235,22 @@ final class ComposeViewController: UIViewController {
             make.height.equalTo(48)
         }
         
-        slimeView.snp.makeConstraints { make in
-               make.center.equalToSuperview()
-               make.width.height.equalTo(180)
-           }
-
-        replyLabel.snp.makeConstraints { make in
-            make.top.equalTo(slimeView.snp.bottom).offset(16)
-            make.leading.trailing.equalToSuperview().inset(32)
+        if let henView {
+            henView.snp.makeConstraints { make in
+                make.centerX.equalToSuperview()
+                make.centerY.equalToSuperview().offset(-40)
+                make.width.height.equalTo(220)
+            }
+            replyLabel.snp.makeConstraints { make in
+                make.top.equalTo(henView.snp.bottom).offset(20)
+                make.leading.trailing.equalToSuperview().inset(32)
+            }
+        } else {
+            // 母鸡没载进来，回应就自己站中间
+            replyLabel.snp.makeConstraints { make in
+                make.center.equalToSuperview()
+                make.leading.trailing.equalToSuperview().inset(32)
+            }
         }
 
     }
@@ -240,47 +262,77 @@ final class ComposeViewController: UIViewController {
         return ChineseDate.title() + "日 · 星期" + names[index]
     }
     
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        henView?.pauseRendering()
+    }
+
     // MARK: - 交互
 
     @objc private func closeTapped() {
-        guard slimeView.isHidden else { return }
+        guard !isRecording else { return }
         textView.resignFirstResponder()
         onClose?()
         dismiss(animated: true)
     }
 
-    // 生成:先出未定形并凝结(乐观 UI)→ 后台调 AI → 拿到真实情绪再揭晓 → 走进广场
+    // 记录:母鸡上台待机(盖住网络等待)→ 拿到结果她点头「记下了」→ 点完头才说话 → 收起
     @objc private func generateTapped() {
         let text = textView.text ?? ""
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-        //孵化前收走气泡
-        careBubble?.removeFromSuperview()
-        careBubble = nil
-        
-        enterHatchingMode()
-        slimeView.beginHatching()     // 立刻凝结,用动画盖住下面的网络等待
 
-        // Task:进入 async 世界,后台等 AI 结果(界面不卡,凝结/待机动画照播)
+    
+
+        enterRecordingMode()
+
+        // Task:进入 async 世界,后台等 AI 结果(界面不卡,待机动画照播)
         Task {
-            //失败也有孵化画面
+            // 她至少要在台上待够这么久 —— 秒回的时候闪一下就没了,反而像出错
             let startedAt = DispatchTime.now()
-            let minHatchNanos: UInt64 = 800_000_000
+            let minStageNanos: UInt64 = 800_000_000
             do {
-                let item =  try await viewModel.generate(content: text)
-                // 拿到真实情绪 → 揭晓;揭晓完淡入 AI 回复,读一会儿再走进广场
-                slimeView.reveal(to: item.emotion) { [weak self] in
-                    guard let self else { return }
-                    self.showReply(item.reply)
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
-                        self?.goToSquare()
-                    }
-                }
+                let item = try await viewModel.generate(content: text)
+                await waitAtLeast(minStageNanos, since: startedAt)
+                acknowledge(reply: item.reply)
             } catch {
-                //返回输入
-                await waitAtLeast(minHatchNanos, since: startedAt)
+                await waitAtLeast(minStageNanos, since: startedAt)
                 handleGenerateFailure(error)
             }
+        }
+    }
+
+    /// 「记下了」:她点一下头,点完再开口。
+    ///
+    /// 两件事分开是有意的 —— 点头是「我收到了」,说话是「我的回应」,
+    /// 挤在一起就没有「她听完了」那个停顿。
+    /// 点完头的信号来自 RiveHenView.onClipFinished(在 viewDidLoad 里接的)。
+    private func acknowledge(reply: String?) {
+        pendingReply = reply
+
+        // .riv 里还没有 Nod、或者根本没载入成功 —— 不卡流程,直接说话
+        guard let henView, henView.play(.nod) else {
+            deliverReply()
+            return
+        }
+
+        // 兜底:万一 Rive 的「播完」回调没来(动画配置有问题、渲染被打断),
+        // 用户会被永远晾在这儿。卡死是最差的失败模式,宁可早一点说话。
+        let timeout = (henView.duration(of: .nod) ?? 1.0) + 0.8
+        DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+            self?.deliverReply()
+        }
+    }
+
+    /// 回调和兜底超时都会走到这儿,所以要幂等。
+    private func deliverReply() {
+        guard !didDeliverReply else { return }
+        didDeliverReply = true
+
+        showReply(pendingReply)
+        pendingReply = nil
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { [weak self] in
+            self?.finishAndClose()
         }
     }
     
@@ -292,11 +344,18 @@ final class ComposeViewController: UIViewController {
     }
     
     private func handleGenerateFailure(_ error: Error) {
-        print("生成失败\(error)")
-        
-        slimeView.isHidden = true
+        print("记录失败 \(error)")
+
+        isRecording = false
+        pendingReply = nil
+        henView?.pauseRendering()
+        henView?.isHidden = true
         replyLabel.isHidden = true
         textView.isHidden = false
+        // 这三行原来漏了 —— enterRecordingMode 把卡片和按钮藏起来了,
+        // 失败时不恢复,用户会对着一片空白,连原文都看不见
+        cardShadow.isHidden = false
+        generateButton.isHidden = false
         placeholderLabel.isHidden = !(textView.text ?? "").isEmpty
         generateButton.isEnabled = true
 
@@ -318,67 +377,42 @@ final class ComposeViewController: UIViewController {
         UIView.animate(withDuration: 0.3) { self.replyLabel.alpha = 1 }
     }
 
-    private func goToSquare() {
+    private func finishAndClose() {
+        henView?.pauseRendering()
         onClose?()
         dismiss(animated: true)
     }
     
-    //MARK: - 主动过关心出现
-    private func presentCareIfNeeded() {
-        guard careBubble == nil,
-              slimeView.isHidden,
-              let care = careViewModel.activeCare() else { return }
-        
-        let bubble = CareBubbleView(text: care.text)
-        view.addSubview(bubble)
-        bubble.snp.makeConstraints { make in
-            make.top.equalTo(textView.snp.bottom).offset(20)
-            make.leading.equalToSuperview().inset(16)
-            make.trailing.lessThanOrEqualToSuperview().inset(16)
-        }
-        
-        bubble.onFirstExpand = { [weak self] in
-            self?.careViewModel.markRead(care)
-        }
-        bubble.onDismiss = { [weak self] in
-//            self?.careBubble?.removeFromSuperview()
-//            self?.careBubble = nil
-        }
-//        bubble.onChat = { [weak self] in
-//            guard let self else { return }
-//            self.careViewModel.markAccepted(care)
-////            self.careBubble?.removeFromSuperview()
-////            self.careBubble = nil
-//            let chatVM = ChatViewModel(care: care, chatRepo: CoreDataChatRepository(), posts: CoreDataPostRepository(), aiService: DeepSeekAIService())
-//            
-//            self.navigationController?.pushViewController(ChatViewController(viewModel: chatVM), animated: true)
-//            
-//        }
-        
-        careBubble = bubble
-        bubble.playEntrance()
-        careViewModel.markShown(care)
-    }
 
     // MARK: - 两种模式切换
 
-    private func enterHatchingMode() {
+    private func enterRecordingMode() {
+        isRecording = true
+        didDeliverReply = false
         textView.resignFirstResponder()
         textView.isHidden = true
         placeholderLabel.isHidden = true
         replyLabel.isHidden = true
-        slimeView.isHidden = false
         cardShadow.isHidden = true
         generateButton.isHidden = true
-        generateButton.isEnabled = false   // 孵化中禁止再点生成
+        generateButton.isEnabled = false   // 记录中禁止再点
+
+        henView?.isHidden = false
+        henView?.resumeRendering()         // Rive 开始渲染
+        henView?.playIdle()
     }
 
     private func resetToInputMode() {
-        slimeView.isHidden = true
+        isRecording = false
+        didDeliverReply = false
+        pendingReply = nil
+        henView?.pauseRendering()
+        henView?.isHidden = true
         replyLabel.isHidden = true
         textView.isHidden = false
         cardShadow.isHidden = false
         generateButton.isHidden = false
+        generateButton.isEnabled = true
         textView.text = ""
         placeholderLabel.isHidden = false
         navigationItem.rightBarButtonItem?.isEnabled = true

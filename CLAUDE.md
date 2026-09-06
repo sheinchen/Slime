@@ -1,6 +1,6 @@
-# CLAUDE.md — 史莱姆树洞 项目常驻背景
+# CLAUDE.md — 母鸡日记 项目常驻背景
 
-> Claude Code 每次启动会自动读这个文件。它是本项目的"常驻记忆":锁死的决策、带我的方式、当前进度都在这里。请全程遵守。详细背景见 `docs/` 下的《项目执行文档》和《PRD》。
+> Claude Code 每次启动会自动读这个文件。它是本项目的"常驻记忆":锁死的决策、带我的方式、当前进度都在这里。请全程遵守。
 >
 > **我的工作分两条线**:这里是**执行线**(推进项目、写代码);我另有一个**教学对话**专门弄懂 iOS 概念。执行线负责往前做,遇到我不懂的概念,给够上手的解释即可,深挖我会拿到教学对话去问。
 
@@ -8,7 +8,10 @@
 
 ## 1. 项目一句话
 
-一个有主动关怀能力的 AI 情绪日记 App:用户记录碎碎念,每篇诞生一只由情绪驱动样貌的史莱姆,一只 AI 史莱姆在合适时机主动关心用户。记录是主干,主动关怀是差异化亮点。iOS 是呈现层。
+一个有主动关怀能力的 AI 情绪日记 App:用户随手记录碎碎念,**一天的记录收束成一颗情绪蛋**(样貌由当天总结情绪驱动);一只 AI 母鸡在合适时机主动关心用户。记录是主干,主动关怀是差异化亮点。iOS 是呈现层。
+
+> 📌 **产品形态已从「一篇日记一只史莱姆」改成「一天一颗蛋」**。首页是草地小岛 + 母鸡 + 鸟巢,点鸟巢写日记、按住母鸡孵今天的蛋;左滑是周条 + 当天日记列表。
+> 代码里仍沿用 `Slime*` 命名(`SlimeEmotion` / `SlimeItem` / `SlimeView`),`SlimeView` 现在是 `EggView` 里那团情绪。`SlimeCell` 已废弃(广场改用 `DiaryEntryCell`)。**看到 Slime 不要以为是旧代码。**
 
 ---
 
@@ -17,23 +20,37 @@
 - **UI**:全 UIKit(不用 SwiftUI)
 - **列表/集合**:现代 UICollectionView —— Compositional Layout + Diffable Data Source(不要用老的 UITableView + cellForRowAt 写法)
 - **布局**:SnapKit(不要手写大量 NSLayoutConstraint)
-- **存储**:Core Data(第一版可先用 UserDefaults + Repository 过渡,但对外接口按 Repository 设计,便于无痛切换)
-- **架构**:MVVM + Repository。View 只负责显示,业务逻辑在 ViewModel,数据读写全部走 Repository,逻辑层与 UI 分离、可测试
-- **形态**:本地为主(当前纯单机,无登录、无账号、无网络账号概念);唯一网络依赖是 AI 调用(经轻后端中转藏 key);其余后端能力(他人回复等)未来迭代再引入
-- **情绪与 AI 结构化输出(已锁死)**:情绪枚举 6 类——happy(开心)/calm(平静)/sad(难过)/angry(生气)/anxious(焦虑)/tired(疲惫),`SlimeEmotion`、prompt 枚举约束、颜色映射均以此为准,不再增减。AI 一次调用结构化返回六字段:摘要、情绪、是否含心愿、心愿时间点、话题分类、共情回应(reply,一句温暖回应,随揭晓/详情呈现)。情绪强度(intensity 1-3)已评估,为后续切片候选,本期不做、不要主动加。
-- **UI 启动**:纯代码搭 UI(可去掉 Storyboard),不依赖 Interface Builder
+- **存储**:Core Data
+- **架构**:MVVM + Repository。View 只负责显示,业务逻辑在 ViewModel,数据读写全部走 Repository;跨仓库+网络的业务流程放 `Services/`
+- **并发**:工程开了 `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` —— **一切默认主线程隔离**,纯值类型/纯函数要显式标 `nonisolated`。注意默认参数表达式是**非隔离**的,不能在那里 new 隔离类型(要用 `= nil` + init 体内构造)
+- **形态**:本地为主(纯单机,无登录、无账号);唯一网络依赖是 AI 调用(经轻后端中转藏 key,尚未做)
+- **情绪与 AI 输出(已锁死)**:情绪枚举 6 类 —— happy / calm / sad / angry / anxious / tired。`SlimeEmotion`、prompt 枚举约束、颜色映射均以此为准,不再增减。
+  AI 目前三个用途,各自独立调用:①单篇日记 `analyze` → `AIAnalysis(emotion, reply)`;②一天收束 `summarizeDay` → `DayEggSummary(text, emotion)`;③多轮聊天 `chat` / `chatstream`(SSE)。
+  ~~摘要/心愿/心愿时间点/话题分类那套六字段结构~~ **已放弃,不要按它实现**。情绪强度(`intensity` 1-3)是主动关照 payload 需要的,**待补到 `DayEgg` 上**。
+- **UI 启动**:纯代码搭 UI,无 Storyboard。`SceneDelegate` 是组合根
 
 ---
 
-## 2.1 主动关心系统(已定稿,实现时按此,不要另提方案)
+## 2.1 主动关照系统 v2(已定稿,实现时按此,不要另提方案)
 
-> **完整设计见《项目执行文档》第 7 节**(五段管道、Rule/Event/引擎、三批规则、演出交互)。这里只列实现时不能违反的红线。
+> **完整规格见 [`docs/主动关照-v2.md`](docs/主动关照-v2.md) —— 那份是唯一权威,有冲突以它为准。** 这里只列不能违反的红线。
+>
+> ⚠️ **v1(切片 7 的三条本地规则)已废弃**。原因:规则在用数数的方式下情绪断言(「连续三篇 sad = 低谷」),而且趋势是「天与天」之间的事、不是「篇与篇」之间的事。
 
-- **管道**:感知(Event)→ 记忆 → 规则召回(本地规则引擎)→ 模型决断(AI 话术)→ 行动(待送出关心 + 打开时演出)。
-- **分工锁死**:"何时关心"由**本地确定性规则**判断,**AI 不参与触发决策**;AI 只做两件翻译 —— 发帖时内容→结构化标签、触发后触发原因→温柔话术。(理解外包给 AI,决策留在本地)
-- **引擎红线**:引擎只做「遍历 → 过滤事件类型 → 查冷却 → 条件判断 → 产出 Action」,**不含任何具体规则的逻辑**(引擎里出现 "sad"、"3 篇" 即跑偏);加规则 = 新增 Rule 文件 + 注册一行;冷却记录**持久化**;**必须有仲裁**(一次打开只送一条);Action 是持久化的「待送出关心」记录,**不直接操作 UI**;引擎**依赖注入,不做单例**。
-- **分批不能提前铺开**:第一批只做「持续低谷 / 情绪回升 / 连续高光」三条;第二批(基线类)、第三批(深夜连发)、心愿提醒(第七类规则)都**以后再说,别主动加**。
-- **文案铁律**:探询不断言;**永远不暴露规则本身**(不出现"连续三篇""检测到");不说教、不给建议;不用推送,只在下次打开 App 时呈现。
+- **决策权分层**:本地闸门(算术)→ AI 决策(语义)→ 本地边界(记账)。
+  **权限不对称:AI 有一票否决权,没有一票通过权** —— AI 可以说「这次不值得说」,但本地闸门不放行,它根本没机会开口。
+- **本地层红线**:闸门代码里**不允许出现任何 `emotion` 字样**。它只回答三件算术:有新蛋吗 / 窗口内够 3 天吗 / 距上条关怀退休满 3 天吗。**一旦本地开始判断「低谷」「回升」,就是跑回 v1 了。**
+- **关怀只看蛋,不看日记**。单篇日记的 emotion 服务于写完那一刻的 reply;蛋的总结情绪才是趋势载体。
+- **生成 ≠ 展示,而且合并在打开时做**:写日记**不触发**任何关怀逻辑(`postSaved` 事件已废弃);唯一事件是 `appOpened`(**进前台 + 跨自然天**)。打开时才调 AI 生成文案 —— 这样文案永远基于最新窗口,情绪反转不会弹出过时关怀。
+- **顺序依赖**:打开 App 必须**先补完欠的蛋,再跑关怀闸门**。反了就缺最新一天,而那正是情绪反转的藏身处。已落在 `SceneDelegate.onAppActive()`。
+- **关怀退场只有两条规则,谁先到算谁**(代码里就是两个时刻取 `min`):
+  ① **关怀之后诞生了新蛋** —— 判据 `蛋.date >= 关怀那天 且 蛋.createdAt > 关怀生成时刻`。**补蛋也算**(用户当天没按母鸡、第二天补出来的,同样是翻篇);两个条件缺一不可,只看 date 会被关怀生成前就存在的当天蛋退掉。
+  ② **生成满 3 天** —— 内容保质期,用户停写日记时的兜底。
+  实际效果:天天写日记的话关怀通常只活 1 天,3 天那条基本是兜底。
+- **两个 3 天**:关怀最长挂 3 天(内容保质期,同时充当露面次数上限)、退休后冷却 3 天。这个数不能放大。
+- **日志即状态**:不要为冷却/上次检查再建独立状态表,全部从 `CareCheck` / `CareMessage` 派生。
+- **文案铁律**:安全底线最高 > **绝不暴露判断依据**(不出现"连续""检测到""记录显示") > 探询不断言 > 不说教不给建议。另加**不说清单**:宁可不说,也不要说一句正确但没用的话。
+- **不要主动加**:自适应频控、心愿提醒、把 `get_mood_history` 做成 tool call、关怀卡片的聊天入口(卡片纯只读是明确的产品选择)。
 
 ---
 
@@ -45,6 +62,7 @@
 
 **带我的方式:**
 - **整块给代码,但配足够解释**。一次给一个完整文件,不要一行行带我敲、不要把简单的东西拆成小碎步(那样太慢)。但每给一段代码,要用中文说清:这个文件/这段在干嘛、涉及的 iOS 概念是什么、为什么这么写。
+- **先读我的代码再给建议**。不要凭印象说「把某处改成什么」—— 我可能已经改过了。给改动要**锚定到实际行号和实际内容**。
 - **写代码时每一步讲清"在干嘛"**,尤其出现新的 iOS 框架概念(生命周期、Core Data、代理、闭包回调等)时,简短点明它是什么、起什么作用。
 - **深入原理放到另一条线**:我另开了一个"教学对话"专门弄懂概念。所以在这条执行线里,你点到概念、给够上手需要的解释即可,**不用长篇展开原理**;我想深挖时会拿到教学对话去问。执行线保持往前推。
 - **卡住时**:如果我说"这个概念我不懂",你简短解释一下够我继续就行,或提示我"这个建议到教学对话深聊",别在执行线停太久。
@@ -53,12 +71,12 @@
 
 - **核心代码 —— 只给我看 + 讲解,不要写入文件,我自己敲**:
   - Core Data(栈、数据模型、增删改查的核心逻辑)
-  - 分层结构(Repository、ViewModel 的设计与职责划分)
+  - 分层结构(Repository / Service / ViewModel 的设计与职责划分)
   - 并发(async/await、@MainActor、actor)
-  - 规则引擎(Event→Rule→Agent→Action)
+  - 关怀引擎(闸门 / AI 决策 / 边界)
   - 这几块是我要吃透、面试要讲的,必须亲手敲。你给代码 + 讲清原理,我自己写进文件。
 - **其余代码 —— 可以直接生成写入文件**:
-  - 常规 UI(ViewController 布局、cell、自定义 view)、样板(CRUD 模板、重复配置)、工程杂项
+  - 常规 UI(ViewController 布局、cell、自定义 view)、样板(CRUD 模板、重复配置)、工程杂项、文档
   - 直接写入,但要用中文说清这段在干嘛、涉及什么 iOS 概念。
 - 不确定某段算核心还是其余时,**先问我**再决定写不写入。
 
@@ -83,46 +101,80 @@
 
 - 语言:全程用中文讲解。
 - 代码风格:清晰优先,命名见名知意。
-- 依赖:SnapKit 用 SPM 引入。
-- 目录分层参考:`Models/`(Core Data 实体+领域模型)、`Repositories/`、`ViewModels/`、`ViewControllers/`、`Views/`(自定义 view / cell)、`Resources/`。
+- 依赖:SnapKit(SPM)、Rive(母鸡动画)。
+- 工程用 **PBXFileSystemSynchronizedRootGroup** —— 新建文件放进目录即自动进 target,不用手动加。
+- 目录分层:
+  `Models/`(Core Data 实体 + 领域模型)、`Repositories/`(仓库读写)、`Services/`(AI 网络层 + 跨仓库业务流程,如 `AIService` / `DayEggService`)、`Care/`(关怀引擎)、`ViewModels/`、`ViewControllers/`、`Views/`、`Core/`(配色/字体/中文日期/缓动等工具)。
+- 单测在 `SlimeTests/`(XCTest,`@testable import Slime`)。只测纯函数,不碰 Core Data。
+- 编译验证:`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcodebuild -project Slime.xcodeproj -scheme Slime -destination 'generic/platform=iOS Simulator' build`
+  (系统 `xcode-select` 指向 Command Line Tools,直接 `xcodebuild` 会失败)
+- 跑测试:把 `build` 换成 `test`,且 destination **必须指定具体机型**(`generic/...` 跑不了测试):
+  `... -destination 'platform=iOS Simulator,name=iPhone 17 Pro' test`
+  查可用机型:`DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer xcrun simctl list devices available`
 
 ---
 
 ## 6. 当前进度(每条切片做完更新这里)
 
-> 这一节是我的跨对话存档点。开新对话 / 重启 Claude Code 时,看这里就知道做到哪了。
+> 这一节是我的跨对话存档点。开新对话时看这里就知道做到哪了。
+> 已完成的切片只留一句话 —— 细节在 git 历史里,不必占常驻上下文。
 
-- **已完成**:
-  - **切片 1(最小闭环)✅**:输入一句话 → ComposeVM → PostRepository → Core Data → SquareVM → 广场(UICollectionView 现代写法)展示为纯色圆角方块。端到端跑通,重启数据还在,一行 AI 未接。
-    - 数据层:`Post` 实体(id/content/createdAt,均非可选,Codegen=Manual 手写子类)、`CoreDataStack`(单例,栈从 AppDelegate 抽出)、`PostRepository`(协议 + `CoreDataPostRepository` 实现,init 注入 context)。
-    - UI 层:代码驱动启动(SceneDelegate 建 window + UINavigationController,已去 Storyboard)、`ComposeViewController`(SnapKit)、`SquareViewController`(Compositional Layout + Diffable Data Source + CellRegistration)、`SlimeCell`。
-    - 逻辑层:`ComposeViewModel` / `SquareViewModel`(不 import UIKit,依赖注入 Repository);`SlimeItem`(值类型 Hashable 展示模型,Post→SlimeItem 转换解耦)。
-    - 依赖:SnapKit 6.0(SPM)。
-  - **切片 2(点击详情)✅**:广场点方块 → `didSelectItemAt` → `dataSource.itemIdentifier(for:)` 取 SlimeItem → 注入 `PostDetailViewModel` → push `PostDetailViewController`(只读展示正文+日期)。源码已按五层目录(Models/Repositories/ViewModels/ViewControllers/Views)归位。
-  - **切片 3(删除)✅**:补全 CRUD 的 D。`PostRepository.delete(id:)`(NSPredicate 按 id 查 + context.delete)。两个入口:广场长按 `UIContextMenuConfiguration` 菜单删除(diffable 动画移除)、详情页垃圾桶 + `UIAlertController` 确认后删并 pop。详情删完靠广场 `viewWillAppear` 重读自动同步,无回调。
-  - **切片 4(史莱姆 view + 动效)✅**:纯色方块换成独立可复用的 `SlimeView` 组件,广场 cell 嵌入。三步各自 commit:①`UIBezierPath` 画粗糙果冻 blob(身体四段三次贝塞尔+两点眼+弧线嘴,坐标在 100×100 参考系再缩放适配任意尺寸);画法抽成 `SlimeShapeProviding` 协议(`BlobSlimeShape` 默认实现),与结构解耦。②`CASpringAnimation` 弹簧呼吸待机(autoreverse+无限循环,`didMoveToWindow` 上屏/离屏自动启停,beginTime 错相位)。③点击 `CAKeyframeAnimation` squash&stretch Q 弹,`CATransaction` completion 恢复呼吸,再延迟 push 详情。预留接口:`SlimeEmotion`(6 情绪:happy/calm/sad/angry/anxious/tired,与第 2 节锁定一致)、`SlimeSpecialState`(彩虹态)、`perform(_:SlimeAction)` 一次性动作 —— 本切片只实现默认情绪 + tapBounce。SlimeView 不感知外部数据。
-  - **切片 5(生成页 · 孵化揭晓 + 走进广场)✅**:三步各自 commit。①情绪贯通数据层:Post 加 `emotion`(String,默认 calm,自动轻量迁移)、`SlimeEmotion` 改 String 原始值 + `random()`、`SlimeItem`/Repository.create(content:emotion:)/SquareVM.map 全带上情绪、`SlimeView.bodyColor(for:)` 情绪→颜色。②SlimeView 加 `hatch(completion:)`:未定形(灰+藏五官+缩小)→ 凝结(`CASpringAnimation` 放大)→ 揭晓(`fillColor` 变色 + 五官 `opacity` 淡入 + `CAKeyframeAnimation` 抖),`CATransaction` completion 串接。③`ComposeVM.generate(content:)→SlimeItem?`(校验+随机情绪+存库+返回);`ComposeViewController` 输入/孵化两模式,点"生成"→ hatch → 揭晓完 push 广场。情绪仍是随机(未接 AI);透明身体/彩虹填充/共享元素"走进"转场留后。
-  - **切片 6(接入 AI 情绪分析 · DeepSeek)✅**:随机情绪换成真实分析。①`AIService` 协议 + `DeepSeekAIService`(OpenAI 兼容 /chat/completions,`response_format:json_object`,两层 JSON 解析;prompt=软萌史莱姆性格+6情绪 few-shot+安全底线+只回 JSON);`AIConfig`(baseURL/model 配置项),key 存 gitignore 的 `Secrets.plist`;**本切片只返回 emotion+reply**,摘要/心愿/话题留后。②Post 加 `reply`(String?,可选,轻量迁移);Repository.create 带 reply。③`ComposeVM.generate` 改 `async throws`(@MainActor,调 AI→存库→返回);SlimeView 的 hatch 拆成 `beginHatching()`(凝结盖住网络延迟)+ `reveal(to:completion:)`(拿真实情绪再揭晓);VC 用 `Task`+`do/catch`。错误处理最终形态:**失败不伪造、不存帖、`async throws` 上抛,VC 弹提示+保留原文重试**;失败路径加最短孵化时长(秒失败也先露灰史莱姆)。
-  - **切片 6 补充(reply 揭晓展示)✅**:`SlimeItem` 加 `reply` 字段(SquareVM.map / ComposeVM.generate 两处构造同步补上),生成页揭晓后在史莱姆下面淡入一行 AI 回复(`replyLabel`,`UIView.animate` 淡入),停留约 2.2 秒再走进广场;失败/重置路径一并隐藏。详情页展示 reply 留后(数据已备好)。
-  - **切片 7(主动关心系统 · 第一批)✅**:五段管道端到端跑通,全部亲手敲(演出 UI 也是)。
-    - ①记忆层:Core Data 加 `CareMessage`(id/ruleId/text/createdAt/status,默认 pending)+ `RuleCooldown`(ruleId/lastTriggeredAt/**ignoredCount** Int16,为以后自适应频控留形状);`CareEvent`(postSaved/appOpened)、`CareReason`(结构化触发原因,不含话术)、`CareStatus` 五值(pending→shown→read→accepted/ignored)+ `PendingCare` 值类型;`CooldownStore`(lastTrigger/recordTrigger/markEngaged 归零/markIgnored +1)、`CareMessageStore`(active/save→返回被覆盖的 shown ruleId/sweepExpired/updateStatus;pending 被覆盖直接删不计忽略,shown 才算 ignored)。
-    - ②引擎:`CareRule` 协议(id/triggerEvents/cooldown?/evaluate(context)→CareReason?)+ `RuleContext`(posts+cooldowns+now 注入,now 可测);`CareEngine`(@MainActor,遍历→过滤事件→时间冷却→evaluate→话术→save+recordTrigger,**第一个命中即停=仲裁,数组顺序=优先级**;不含任何规则字眼)。三条规则:`LowMoodStreakRule`(近3篇全消极,7天冷却)/`MoodRecoverRule`(**配对型冷却**:与低谷触发配对一对一次,cooldown=nil 自管)/`HappyStreakRule`(连3篇 happy,7天)。曾用 `StubOpeningProvider` 单独验证决策层(四幕冒烟:触发/冷却挡/配对回升/高光)后删除。
-    - ③AI 话术:`DeepSeekAIService` 实现 `CareOpeningProvider.opening(for:)`(reason 本地翻成内部描述→text 模式→temperature 0.8);carePrompt 铁律:安全底线>不暴露判断依据>探询不断言>不说教。`ComposeVM.generate` 存库后独立 Task 发 `.postSaved`(careEngine 为可选依赖,旁路不拖主流程)。
-    - ④组装+演出:SceneDelegate 作**组合根**(建 stores/规则/引擎,注入 VM/VC,启动发 `.appOpened` 清扫过期);`CareViewModel`(activeCare/markShown/markRead+markEngaged);`CareBubbleView`(小史莱姆+「…」气泡,点开约束驱动长大显全文,再点下沉退场;露面即 shown,点开即 read+归零);ComposeVC.viewDidAppear 演出、孵化前收走气泡。
-- **正在做**:
-  - **切片 8(AI 聊天模式)**,分两步各自 commit:①非流式跑通 —— Core Data 建 `ChatSession`/`ChatMessage`(一对多关系,会话经 careMessageId 关联触发它的关心)、聊天界面(中央呼吸史莱姆+头顶气泡,无界面感)、上下文组装(人设+触发语境(关心对应的那几篇帖子)+最近 N 轮历史+当前消息,N=10)、气泡加「聊聊」入口(accepted 接上)、AIService 新增多轮 chat 方法(与单帖分析分开);失败该轮可重试不丢历史;随时退出不挽留,消息实时落库。②升级 SSE 流式输出(stream 参数/URLSession.bytes/AsyncSequence/分片解析/主线程 UI 节流)+ 说话时史莱姆轻微起伏。行为约束进 system:短口语、一次一小段、禁 Markdown、不说教、温柔收尾、安全底线照旧。
-- **下一步(待做)**:
-  - 候选:第二批规则(个人基线统计)/ 第三批规则(深夜连发 + 优先级抢占)/ 自适应频控(按 ignoredCount 拉长冷却,只改引擎一处)/ 心愿提醒(AIService 扩展 hasWish+wishDate)/ 详情页展示 reply / AI 结构化输出补摘要+话题 / 空广场占位提示 / 揭晓可跳过 + 高频降级 / "走进广场"共享元素转场 / 透明身体+彩虹液体填充。
-- **关键待确认项**(来自 PRD,做到相关切片再定):
-  - 后端选型(轻后端中转藏 key,现为客户端直连 DeepSeek+Secrets.plist,上线前必换)、真机/开发者账号、通知实现方式、隐私处理(情绪枚举已锁定 6 类见第 2 节;AI 服务选型已定 DeepSeek)
+### 已完成
+
+| # | 切片 | 一句话 |
+|---|---|---|
+| 1 | 最小闭环 | 输入 → ComposeVM → PostRepository → Core Data → 广场(Compositional Layout + Diffable) |
+| 2 | 点击详情 | `itemIdentifier(for:)` 取 item → 注入 DetailVM → push |
+| 3 | 删除 | `PostRepository.delete(id:)`;长按菜单 + 详情页垃圾桶两个入口 |
+| 4 | SlimeView + 动效 | `UIBezierPath` 果冻 blob、`CASpringAnimation` 呼吸、点击 squash&stretch |
+| 5 | 孵化揭晓 | Post 加 `emotion`;`hatch()` 未定形→凝结→揭晓 |
+| 6 | 接入 AI 情绪分析 | `AIService` 协议 + `DeepSeekAIService`(json_object);Post 加 `reply`;**失败不伪造不存帖,上抛让 VC 弹提示** |
+| 7 | 主动关心 v1 | 五段管道跑通(Event→Rule→引擎→AI 话术→气泡演出)。**已被 v2 取代,代码已于切片 11 删净** |
+| 8 | AI 聊天 | `ChatSession`/`ChatMessage`;SSE 流式(`URLSession.bytes` + `AsyncThrowingStream`) |
+| 9 | 母鸡日记(产品大改) | 一天一颗蛋:`DayEgg` 实体 + `DayEggStore` + `summarizeDay`;首页草地小岛 + Rive 母鸡 + 鸟巢;`RootPagerViewController` 左右分页;周条 + 日记列表 |
+| 10 | 补蛋抽成服务 | `DayEggService`(`hatchAllPending` / `prefetchToday` / `finishToday`)+ `EggDebt` 判定规则;`SquareViewModel` 瘦身 60 行;组合根建唯一实例,补蛋从「进广场页」改到 `sceneDidBecomeActive` |
+| 11 | 主动关照 v2·本地层 | 数据层迁移(`CareMessage` 两态 + `retiredAt`/`referencedDates`、新增 `CareCheck`、删 `RuleCooldown`);`CareGateRule` 纯函数闸门 + `CareGate` 取数;`CareEngine` 编排退场→闸门→记日志;**新建 SlimeTests target,10 条单测**;v1 代码删净 |
+
+### 正在做:主动关照 v2
+
+按 [`docs/主动关照-v2.md`](docs/主动关照-v2.md) 第 0 节的十步走。第 1–6 步已完成,当前在**第 7 步**:
+
+- ✅ 1–3 `DayEggService` 抽出、`SquareViewModel` 瘦身、补蛋挪到 App 激活
+- ✅ 4 `DayEggStore.delete(for:)` + 孤儿蛋清理
+- ✅ 5 数据层迁移:`CareMessage` 两态 + `retiredAt` + `referencedDates`;新增 `CareCheck`;删 `RuleCooldown`
+- ✅ 6 删三条老规则与 `postSaved`,写 `CareGate` + 单测(10 条全绿)
+- 🚧 **7 AI 决策层**:`MoodWindow` → prompt → 结构化返回(`shouldShow` / `text` / `referencedDates` / `pattern` / `confidence`)
+- ⬜ 8 产品边界 + 卡片生命周期(卡片挂首页,`CareViewModel` 目前无使用者)
+- ⬜ 9 可观测(`CareCheck` 后半段字段写全 + debug 页)
+- ⬜ 10 eval(20 场景 golden set)
+
+**本地层已完整,接线在 `CareEngine.handle` 的 `case .pass` 分支**(现在只写了 `dropReason = "AI 决策层未接入"`)。
+
+#### 实现时踩过的两个坑(别再踩)
+
+- **退休必须同时写 `status` 和 `retiredAt`**。v1 只改 `status`,`retiredAt` 永远是 nil → 冷却锚点查不到 → 关怀天天弹。现在两行绑死在 `CoreDataCareMessageStore` 的私有 `retire(_:at:)` 里,全类只有这一个出口。
+- **退休时刻记「实际死的那一刻」,不是 `now`**。隔一周才打开 App,三天前就该走的关怀若记成"今天退休",冷却又白等 3 天。
+
+### 已知待清理
+
+- `SlimeCell.swift` 无人引用,可删
+- `SceneDelegate` 第 30 行 `DayEggService(posts:)` 漏传 `eggs: eggStore`,会自己 new 一个仓库实例(今天不出错,两者共享同一 `viewContext`,但组合根应当只有一份)
+- `DayEggStore` 里 `private let calendar` 已无人使用(判据搬进 SQL 谓词后就不需要了),连同 init 参数一起删
+- `ChatMessageItem` 缺 `nonisolated`(同 `SlimeItem` 的修法)
+- `PendingCare.swift` 注释「或用户主动关掉」已失效 —— 退场只有两条规则
+
+### 关键待确认项
+
+- 轻后端中转藏 key(现为客户端直连 DeepSeek + `Secrets.plist`,**上线前必换**)
+- 真机 / 开发者账号、隐私处理
 
 ---
 
 ## 7. 范围红线(本期不做,别主动加)
 
-- 登录 / 账号体系(与"他人回复"同期,未来才做)
+- 登录 / 账号体系
 - 他人回复 / 社区功能
-- 帖子久无回应时的 AI 回应(已挪 P2,依赖"他人回复",与其同期引入)
+- 帖子久无回应时的 AI 回应(依赖"他人回复",与其同期)
 - 挑战 / 奖励 / 游戏化
 - 多用户、数据同步、内容审核
 

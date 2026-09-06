@@ -17,6 +17,9 @@ final class RiveHenView: UIView {
         case peck = "Peck"
         /// 转身。左转中再转回左，播完的那一刻水平翻面，就成了「转向另一边」。
         case turn = "Turn_Back"
+        /// 点头 —— 「我记下了」。写完日记的揭晓演出用。
+        /// .riv 里还没有这段也不要紧：has() 会挡掉，play 返回 false，调用方自己降级。
+        case nod = "Nod"
 
         static let file = "Hen"
         /// 会被随机插播的小动作。转身不在里面 —— 那是走位需要时才播的。
@@ -34,6 +37,10 @@ final class RiveHenView: UIView {
 
     /// 当前正在播的 one-shot。播完（Rive 回调 pause/stop）就清空并回到 idle。
     private(set) var playingClip: Clip?
+
+    /// 某段 one-shot 播完了（参数是刚播完的那段）。
+    /// 「回到 idle」内部已经做完，这里只是通知外面 —— 比如「点完头再说话」。
+    var onClipFinished: ((Clip) -> Void)?
 
     /// 主动暂停（退到后台）也会触发 pause 回调，那次不算「播完了」。
     private var suppressFinish = false
@@ -119,8 +126,9 @@ final class RiveHenView: UIView {
     }
 
     private func returnToIdle() {
-        guard !suppressFinish, playingClip != nil else { return }
+        guard !suppressFinish, let finished = playingClip else { return }
         playIdle()
+        onClipFinished?(finished)
     }
 
     func pauseRendering() {

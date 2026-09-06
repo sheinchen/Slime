@@ -23,6 +23,8 @@ extension CareMessage {
     @NSManaged public var text: String
     @NSManaged public var status: String
     @NSManaged public var createdAt: Date
+    @NSManaged public var retiredAt: Date?
+    @NSManaged public var referencedDates: String?
 
 }
 

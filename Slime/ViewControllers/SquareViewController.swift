@@ -15,7 +15,16 @@ import SnapKit
 final class SquareViewController: UIViewController {
 
     // 广场的逻辑层,负责读数据、转成 SlimeItem
-    private let viewModel = SquareViewModel()
+    private let viewModel: SquareViewModel
+
+    init(viewModel: SquareViewModel) {
+        self.viewModel = viewModel
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
     
     private let detailView = DiaryDetailView()
 
@@ -80,7 +89,30 @@ final class SquareViewController: UIViewController {
         setupCollectionView()
         setupCard()
         setupDataSource()
+     
+        nestStage.canLay = { [weak self] in
+            self?.viewModel.canHatchToday ?? false
+        }
         
+        nestStage.onPressHalfway = { [weak self] in
+            self?.viewModel.prefetchTodaySummary()
+        }
+        
+        nestStage.onDidLay = { [weak self] in
+            guard let self else { return }
+            Task {
+                do {
+                    let summary = try await self.viewModel.finishTodaySummary()
+                    self.nestStage.revealEgg(to: summary.emotion)
+                    self.nestStage.setCaption(summary.text)
+                    self.weekStrip.configure(days: self.viewModel.days, selected: self.viewModel.selectedDate)
+                } catch {
+                    self.refresh()
+                    self.nestStage.setCaption("哎呀没有孵出来！再试一次！")
+                }
+            }
+            
+        }
     }
     
     private func refresh() {
@@ -278,11 +310,12 @@ extension SquareViewController: PagerPage {
         viewModel.loadPosts()
         refresh()
         
-        //补蛋 另开一个Task
-        Task {
-            await viewModel.hatchPendingEggIfNeeded()
-            refresh()
-        }
+   
+    }
+    
+    func dataDidChange() {
+        viewModel.loadPosts()
+        refresh()
     }
 }
 

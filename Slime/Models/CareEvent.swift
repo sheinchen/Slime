@@ -8,6 +8,5 @@
 import Foundation
 
 enum CareEvent {
-    case postSaved
     case appOpened
 }
