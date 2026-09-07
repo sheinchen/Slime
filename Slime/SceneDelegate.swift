@@ -14,6 +14,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
     private var eggService: DayEggService?
     private var careEngine: CareEngine?
+    private var careChecks: CareCheckStore?
     private weak var rootVC: RootPagerViewController?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
@@ -39,12 +40,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let careEngine = CareEngine(gate: careGate,
                                     eggs: eggStore,
                                     messages: careMessages,
-                                    checks: careChecks)
+                                    checks: careChecks,
+                                    ai: aiService)
 
 
         let composeVM = ComposeViewModel(repository: postRepo, aiService: aiService)
         let squareVM = SquareViewModel(repository: postRepo, eggService: eggService)
         let homeVC = HomeViewController()
+        homeVC.careViewModel = CareViewModel(messages: careMessages)
         let rootVC = RootPagerViewController(pages: [homeVC,SquareViewController(viewModel: squareVM)])
         homeVC.makeComposeViewController = { [weak rootVC] backdrop ,onClose in
             let vc =  ComposeViewController(viewModel: composeVM)
@@ -73,6 +76,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.window = window
         self.eggService = eggService
         self.careEngine = careEngine
+        self.careChecks = careChecks
         self.rootVC = rootVC
         
     }
@@ -95,6 +99,24 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         // ② 再跑关怀
         await careEngine?.handle(.appOpened)
+        // 关怀可能刚落库，通知首页看一眼 ——
+        // 这个 Task 跑完时 viewDidAppear 早就过去了，不广播卡片就不会出现。
+        rootVC?.broadcastDataChange()
+
+        #if DEBUG
+        if let c = careChecks?.recent(limit: 1).first {
+            print("""
+
+            ========== 🔍 关怀检查 ==========
+            闸门: \(c.gatePassed ? "过" : "挡") \(c.gateReason ?? "")
+            调AI: \(c.aiCalled)   耗时: \(c.latencyMs)ms
+            展示: \(c.finalShown)  \(c.dropReason ?? "")
+            原始: \(c.aiRaw ?? "-")
+            ================================
+
+            """)
+        }
+        #endif
     }
 
 

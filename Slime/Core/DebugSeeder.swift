@@ -65,7 +65,7 @@ enum DebugSeeder {
 
                 let post = Post(context: context)
                 post.id = UUID()
-                post.content = "【测试】\(offset) 天前第 \(n + 1) 篇，情绪 \(emotion.rawValue)"
+                post.content = Self.sampleEntry(emotion, dayIndex: index, n: n)
                 post.createdAt = at
                 post.dayKey = day                        // 归堆靠它，别漏
                 post.emotion = emotion.rawValue
@@ -78,7 +78,7 @@ enum DebugSeeder {
                 // 撞 key 会直接 fatalError —— 一进广场页就崩。
                 let egg = existingEgg(for: day, in: context) ?? DayEgg(context: context)
                 egg.date = day
-                egg.text = "【测试】\(offset) 天前的一天"
+                egg.text = Self.sampleSummary(emotion, dayIndex: index)
                 egg.emotion = emotion.rawValue
                 // 必须晚于那天最后一篇日记 —— EggDebt.owes 判的就是 egg.createdAt < latestEntryAt。
                 // 写反了会被判成「蛋过时了」，一开 App 就重孵一堆。
@@ -121,8 +121,19 @@ enum DebugSeeder {
         let eggs = (try? context.fetch(NSFetchRequest<DayEgg>(entityName: "DayEgg"))) ?? []
         eggs.forEach { context.delete($0) }
 
+        // 关怀那两张表也要清，否则改一次代码只能验一次：
+        // ① CareCheck 留着 → lastCheckedAt 是上次那一刻，而播种的蛋 createdAt 都在过去
+        //    → 闸门条件①「自上次检查后没有新蛋」直接挡下。
+        // ② 上次生成的关怀还挂着 → 闸门第 0 条挡；而播种的蛋触发不了退场
+        //    （createdAt 在过去，不满足 > care.createdAt），只能干等 3 天保质期。
+        let messages = (try? context.fetch(CareMessage.fetchRequest())) ?? []
+        messages.forEach { context.delete($0) }
+
+        let checks = (try? context.fetch(CareCheck.fetchRequest())) ?? []
+        checks.forEach { context.delete($0) }
+
         saveIfNeeded(context)
-        print("🧹 清空测试库：\(posts.count) 篇日记、\(eggs.count) 颗蛋")
+        print("🧹 清空测试库：\(posts.count) 篇日记、\(eggs.count) 颗蛋、\(messages.count) 条关怀、\(checks.count) 条检查日志")
     }
 
     /// 一步到位：清空 + 播种。手动测试最常用的入口。
@@ -131,6 +142,32 @@ enum DebugSeeder {
                       entriesPerDay: Int = 1) {
         wipeAll()
         seedHistory(emotions: emotions, withEggs: withEggs, entriesPerDay: entriesPerDay)
+    }
+
+    // MARK: - 像样的测试内容
+
+    /// 蛋的 text 是**唯一发给关怀 AI 的内容**（窗口里的 summary 就是它）。
+    /// 用「【测试】3 天前的一天」这种占位符,AI 手上就只剩 emotion 一个真信息 ——
+    /// 实测它会直接回 shouldShow: false,并在 pattern 里吐槽「信息仅为测试标签」。
+    /// 那样测不出语义判断,只能测出管道通不通。
+    private static let summaries: [SlimeEmotion: [String]] = [
+        .happy:   ["久违地睡到自然醒,阳光很好", "和朋友吃了顿饭,笑到肚子疼", "小事都挺顺,一整天轻飘飘的"],
+        .calm:    ["没什么特别的,把手边的事做完了", "傍晚去河边走了走,风不冷不热", "一个人待着,觉得挺舒服"],
+        .sad:     ["方案又被打回来,有点说不出话", "翻到以前的照片,心里空落落的", "跟人说了几句,还是觉得没被听懂"],
+        .angry:   ["排队被插了,忍了半天没发作", "同事把锅甩过来,气得手抖", "解释了三遍还是被当耳旁风"],
+        .anxious: ["deadline 在后天,进度只走了一半", "消息发出去半天没回,一直在想", "明天要汇报,晚上翻来覆去"],
+        .tired:   ["连着加班第四天,回家只想躺着", "开了一整天会,脑子是木的", "身体没病,就是提不起劲"],
+    ]
+
+    /// 同一种情绪连着几天时轮换句子,免得时间线读起来像复读机。
+    private static func sampleSummary(_ emotion: SlimeEmotion, dayIndex: Int) -> String {
+        let list = summaries[emotion] ?? ["平平常常的一天"]
+        return list[dayIndex % list.count]
+    }
+
+    private static func sampleEntry(_ emotion: SlimeEmotion, dayIndex: Int, n: Int) -> String {
+        let base = sampleSummary(emotion, dayIndex: dayIndex)
+        return n == 0 ? base : "\(base)(第 \(n + 1) 篇)"
     }
 
     // MARK: - 私有

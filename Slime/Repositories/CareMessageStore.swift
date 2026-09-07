@@ -21,6 +21,9 @@ protocol CareMessageStore {
 
     /// 冷却期的锚点：最新一条已退场关怀的退场时刻。
     func lastRetiredAt() -> Date?
+    
+    /// 最近说过的几句关怀 —— 给 AI 看的，让它自己避免重复。
+    func recentTexts(limit: Int) -> [String]
 }
 
 
@@ -72,6 +75,12 @@ final class CoreDataCareMessageStore: CareMessageStore {
          return (try? context.fetch(request))?.first?.retiredAt
      }
     
+    func recentTexts(limit: Int) -> [String] {
+        let request = CareMessage.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \CareMessage.createdAt, ascending: false)]
+        request.fetchLimit = limit
+        return ((try? context.fetch(request)) ?? []).map(\.text)
+    }
  
     
      
@@ -88,10 +97,19 @@ final class CoreDataCareMessageStore: CareMessageStore {
       }
     
     private static func encode(_ dates: [Date]) -> String {
-          let f = ISO8601DateFormatter()
-          f.formatOptions = [.withFullDate]
-          return dates.map { f.string(from: $0) }.joined(separator: ",")
-      }
+           dates.map { dayFormatter.string(from: $0) }.joined(separator: ",")
+       }
+
+       /// 和 AIService 里那个是同一个约定：yyyy-MM-dd、锁 en_US_POSIX、**跟随本地时区**。
+       /// 蛋的 date 是 Calendar.current.startOfDay（本地零点），格式化必须用同一个时区，
+       /// 否则 UTC+8 会整体往前差一天。
+       /// （原来用的 ISO8601DateFormatter 默认时区是 GMT —— 这是它和 DateFormatter 最坑的区别。）
+    private static let dayFormatter: DateFormatter = {
+       let f = DateFormatter()
+       f.dateFormat = "yyyy-MM-dd"
+       f.locale = Locale(identifier: "en_US_POSIX")
+       return f
+    }()
     
 
     

@@ -6,6 +6,7 @@
 //
 
 import UIKit
+import SnapKit
 
 final class HomeViewController: UIViewController {
     
@@ -27,10 +28,18 @@ final class HomeViewController: UIViewController {
     
     private var displayLink: CADisplayLink?
     private var lastTimestamp: CFTimeInterval = 0
-    
+
+    // MARK: - 关怀卡片
+    private let careCard = CareCardView()
+    /// 正挂在屏幕上的那条。nil = 现在没露面。
+    private var showingCareId: UUID?
+    /// 兜底淡出的定时器。用户没动作时，10 秒后自己走。
+    private var careTimeout: DispatchWorkItem?
+
     //注入组合根
     var makeComposeViewController: ((_ backdrop: UIImage?, _ onClose: @escaping () -> Void) -> UIViewController)?
     var makeChatViewController: (() -> UIViewController)?
+    var careViewModel: CareViewModel?
     
     /// 今天下过蛋没有。日记流程还没接上，先留着驱动文案和提示圈。
     private var laidToday = false {
@@ -48,6 +57,7 @@ final class HomeViewController: UIViewController {
         setupHeader()
         setupIsland()
         setupChrome()
+        setupCareCard()
         
         NSLayoutConstraint.activate([
             sky.leadingAnchor.constraint(equalTo: view.leadingAnchor),
@@ -63,6 +73,7 @@ final class HomeViewController: UIViewController {
         island.onNestTap = { [weak self] in
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             guard let self else { return }
+            self.dismissCare()          // 用户去写日记了，卡片让路
             let backdrop = self.view.blurredSnapshot(radius: 5)
             
             guard let composeVC = self.makeComposeViewController?(backdrop, { [weak self] in
@@ -78,7 +89,9 @@ final class HomeViewController: UIViewController {
       
         island.onHenTap = { [weak self] in
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-            guard let self, let chatVC = self.makeChatViewController?() else { return }
+            guard let self else { return }
+            self.dismissCare()
+            guard let chatVC = self.makeChatViewController?() else { return }
             self.present(chatVC,animated: true)
         }
         
@@ -140,6 +153,45 @@ final class HomeViewController: UIViewController {
             ])
         }
         
+        private func setupCareCard() {
+            careCard.isHidden = true
+            view.addSubview(careCard)
+            careCard.snp.makeConstraints {
+                // 贴着头部那行小字下面，和它左右对齐；岛在 y=352，中间这块空着正好
+                $0.top.equalTo(subLabel.snp.bottom).offset(26)
+                $0.leading.trailing.equalToSuperview().inset(34)
+            }
+        }
+
+        // MARK: - 关怀卡片的「单次露面」
+        //
+        // ⚠️ 这一整块只管露面，**不改任何关怀状态**。
+        //    卡片淡出后 CareMessage 仍是 shown，下次进首页还会再来。
+        //    真正的退场由 CareEngine 的两条规则判定（新蛋诞生 / 满 3 天）。
+
+        private func presentCareIfNeeded() {
+            // 已经挂着就别重来，否则每次 dataDidChange 都会重放一遍动画
+            guard showingCareId == nil else { return }
+            guard let care = careViewModel?.activeCare() else { return }
+
+            showingCareId = care.id
+            careCard.setText(care.text)
+            careCard.slideIn()
+
+            // 兜底：用户就这么看着不动，10 秒后自己走
+            let work = DispatchWorkItem { [weak self] in self?.dismissCare() }
+            careTimeout = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: work)
+        }
+
+        private func dismissCare() {
+            careTimeout?.cancel()
+            careTimeout = nil
+            guard showingCareId != nil else { return }
+            showingCareId = nil
+            careCard.fadeOut()
+        }
+
         override func viewDidLayoutSubviews() {
             super.viewDidLayoutSubviews()
             
@@ -174,11 +226,12 @@ final class HomeViewController: UIViewController {
             island.hen?.resumeRendering()
             startLoop()
             isOnScreen = true
-            
+            presentCareIfNeeded()
         }
         
         override func viewDidDisappear(_ animated: Bool) {
             super.viewDidDisappear(animated)
+            dismissCare()
             stopLoop()
             island.stopBreathing()
             islandShadow.removeAnimation(forKey: "breathe")
@@ -275,5 +328,13 @@ extension HomeViewController: PagerPage {
     func pageVisibilityDidChange(isCurrent: Bool) {
         isCurrentPage = isCurrent
         syncRunningState()
+        // 左滑去周条了 —— 也算「开始操作页面」，卡片让路
+        if !isCurrent { dismissCare() }
+    }
+
+    /// CareEngine 是在 sceneDidBecomeActive 的 Task 里跑的，
+    /// 跑完时 viewDidAppear 多半已经过去了 —— 所以要靠这个回调再看一眼。
+    func dataDidChange() {
+        presentCareIfNeeded()
     }
 }
