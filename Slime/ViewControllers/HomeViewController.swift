@@ -149,7 +149,9 @@ final class HomeViewController: UIViewController {
             NSLayoutConstraint.activate([
                 hintLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor),
                 hintLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-                hintLabel.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -96),
+                // 贴安全区而不是 view 底：根容器给每一页加了 additionalSafeAreaInsets，
+                // 贴安全区的东西会自动让开底下那条浮动 tab
+                hintLabel.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -16),
             ])
         }
         
@@ -324,7 +326,7 @@ final class HomeViewController: UIViewController {
     }
 
 
-extension HomeViewController: PagerPage {
+extension HomeViewController: RootPage {
     func pageVisibilityDidChange(isCurrent: Bool) {
         isCurrentPage = isCurrent
         syncRunningState()

@@ -22,8 +22,8 @@ protocol CareMessageStore {
     /// 冷却期的锚点：最新一条已退场关怀的退场时刻。
     func lastRetiredAt() -> Date?
     
-    /// 最近说过的几句关怀 —— 给 AI 看的，让它自己避免重复。
-    func recentTexts(limit: Int) -> [String]
+    /// 最近几条关怀，带「是否仍挂着」。给 AI 判断该保持还是该换。
+    func recentCares(limit: Int) -> [PastCare]
 }
 
 
@@ -75,12 +75,14 @@ final class CoreDataCareMessageStore: CareMessageStore {
          return (try? context.fetch(request))?.first?.retiredAt
      }
     
-    func recentTexts(limit: Int) -> [String] {
-        let request = CareMessage.fetchRequest()
-        request.sortDescriptors = [NSSortDescriptor(keyPath: \CareMessage.createdAt, ascending: false)]
-        request.fetchLimit = limit
-        return ((try? context.fetch(request)) ?? []).map(\.text)
-    }
+    func recentCares(limit: Int) -> [PastCare] {
+            let request = CareMessage.fetchRequest()
+            request.sortDescriptors = [NSSortDescriptor(keyPath: \CareMessage.createdAt, ascending: false)]
+            request.fetchLimit = limit
+            return ((try? context.fetch(request)) ?? []).map {
+                PastCare(text: $0.text, stillShowing: $0.status == CareStatus.shown.rawValue, saidAt: $0.createdAt, about: Self.decode($0.referencedDates))
+            }
+        }
  
     
      
@@ -99,6 +101,13 @@ final class CoreDataCareMessageStore: CareMessageStore {
     private static func encode(_ dates: [Date]) -> String {
            dates.map { dayFormatter.string(from: $0) }.joined(separator: ",")
        }
+    
+    private static func decode(_ raw: String?) -> [Date] {
+        guard let raw, !raw.isEmpty else { return [] }
+        return raw.split(separator: ",").compactMap {
+            dayFormatter.date(from: String($0))
+        }
+    }
 
        /// 和 AIService 里那个是同一个约定：yyyy-MM-dd、锁 en_US_POSIX、**跟随本地时区**。
        /// 蛋的 date 是 Calendar.current.startOfDay（本地零点），格式化必须用同一个时区，

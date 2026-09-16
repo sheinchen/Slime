@@ -23,4 +23,29 @@ enum ChineseDate {
         guard let month = parts.month, let day = parts.day else { return "" }
         return numeral(month) + "月" + numeral(day)
     }
+
+    /// 「前几天」「两个多月前」这种**模糊**的时间距离。
+    ///
+    /// 专门给 AI 看的。检索到旧日记之后要告诉母鸡这事有多久了，
+    /// 但 prompt 里明令它不许说出具体日期（说日期像在查档案，不像朋友）。
+    /// 与其给了精确日期再叮嘱它别说，不如**根本不给** —— 说不出口才是真说不出口。
+    static func vague(_ date: Date, from now: Date = Date(), calendar: Calendar = .current) -> String {
+        let from = calendar.startOfDay(for: date)
+        let to = calendar.startOfDay(for: now)
+        let days = calendar.dateComponents([.day], from: from, to: to).day ?? 0
+
+        switch days {
+        case ..<0:    return "最近"      // 未来时间，不该出现，兜底
+        case 0:       return "今天"
+        case 1:       return "昨天"
+        case 2...6:   return "前几天"
+        case 7...13:  return "上周"
+        case 14...29: return "半个多月前"
+        case 30...59: return "一个多月前"
+        case 60...89: return "两个多月前"
+        case 90...179: return "几个月前"
+        case 180...364: return "半年多前"
+        default:      return "很久以前"
+        }
+    }
 }

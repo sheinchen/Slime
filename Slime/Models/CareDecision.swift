@@ -14,6 +14,13 @@ nonisolated enum CareSafety: String {
     case crisis     // 严重低落 / 绝望 / 自伤倾向
 }
 
+nonisolated struct PastCare {
+    let text: String
+    let stillShowing: Bool
+    let saidAt: Date
+    let about: [Date]
+}
+
 /// AI 决策层的结构化返回。
 nonisolated struct CareDecision {
     let shouldShow: Bool

@@ -24,6 +24,7 @@ extension Post {
     @NSManaged public var emotion: String
     @NSManaged public var reply: String?
     @NSManaged public var dayKey: Date?
+    @NSManaged public var embedding: Data?
 }
 
 extension Post : Identifiable {

@@ -20,6 +20,8 @@ enum Palette {
     static let grassTop = UIColor(hex: 0x8ECB44)
     static let grassSide = UIColor(hex: 0x6FAF32)
     static let grassTuft = UIColor(hex: 0x74B93A)
+    /// 绿底上的字色（周条、月历）。比 Palette.ink 绿，压在草色上才不发灰
+    static let grassInk = UIColor(hex: 0x3D5A1C)
 
     static let nest = UIColor(hex: 0xE9B95F)
     static let nestDeep = UIColor(hex: 0xD9A44A)

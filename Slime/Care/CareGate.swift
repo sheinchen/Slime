@@ -14,11 +14,13 @@ nonisolated struct MoodWindow: Equatable {
 
 /// 被哪一条挡下的。rawValue 直接写进 CareCheck.gateReason，
 /// 以后 debug 页上一眼就能看出「昨天那条为什么没弹」。
+///
+/// v2 原本还有一条「已有关怀挂着」。改成「让 AI 决定要不要替换」之后删掉了 ——
+/// 关怀挂着时，AI 每次都该有机会判断「旧的还贴切吗」，本地不再替它做主。
 nonisolated enum GateBlockReason: String {
-    case careAlreadyShowing = "已有关怀挂着"
-    case noNewEgg           = "自上次检查后没有新蛋"
-    case notEnoughDays      = "窗口内有蛋的天数不足"
-    case cooling            = "距上条关怀退休不满冷却期"
+    case noNewEgg      = "自上次检查后没有新蛋"
+    case notEnoughDays = "窗口内有蛋的天数不足"
+    case cooling       = "距上条关怀退场不满冷却期"
 }
 
 nonisolated enum CareGateResult: Equatable {
@@ -37,16 +39,22 @@ nonisolated enum CareGateRule {
 
     static let windowDays = 14
     static let minDaysWithEgg = 3
-    static let cooldown: TimeInterval = 3 * 24 * 60 * 60   // 退休后冷却 3 天
 
-    static func decide(hasActiveCare: Bool,
-                       eggsInWindow: [DayEggRecord],
+    /// 冷却：上条关怀退场后，至少隔这么多个**自然天**才能再生成。
+    ///
+    /// 从 3 天降到 1 天，是因为「要不要换成新的」现在交给了 AI ——
+    /// 本地这条只剩兜底作用，防它天天想说话。
+    /// 而「同一天不会重复」已经由条件①（有新蛋）保证了。
+    ///
+    /// 按**自然天**而不是小时：用户今天 10 点打开、明天 9 点打开只差 23 小时，
+    /// 按小时算会被挡下 —— 但那只是打开时刻的随机偏差，不该影响该不该关怀。
+    static let cooldownDays = 1
+
+    /// - Parameter daysSinceLastRetire: 距上条关怀退场过了几个自然天。nil = 从没关怀过。
+    ///   日历计算放在 `CareGate` 里做，这里只比数字 —— 纯函数不碰 Calendar。
+    static func decide(eggsInWindow: [DayEggRecord],
                        lastCheckedAt: Date?,
-                       lastRetiredAt: Date?,
-                       now: Date) -> CareGateResult {
-
-        // 0. 前置：已经有关怀挂着，不生成第二条
-        if hasActiveCare { return .blocked(.careAlreadyShowing) }
+                       daysSinceLastRetire: Int?) -> CareGateResult {
 
         // 1. 自上次检查后有新蛋吗。
         //    从没检查过（nil）算「有新的」—— 第一次总该看一眼。
@@ -58,9 +66,8 @@ nonisolated enum CareGateRule {
         // 2. 窗口内有蛋的天数够 AI 看出走向吗（一颗蛋 = 一天，所以数组长度就是天数）
         if eggsInWindow.count < minDaysWithEgg { return .blocked(.notEnoughDays) }
 
-        // 3. 距上条关怀退休满冷却期了吗。
-        //    从没关怀过（nil）算冷却已过。
-        if let lastRetiredAt, now.timeIntervalSince(lastRetiredAt) < cooldown {
+        // 3. 距上条关怀退场满冷却了吗。从没关怀过（nil）算冷却已过。
+        if let daysSinceLastRetire, daysSinceLastRetire < cooldownDays {
             return .blocked(.cooling)
         }
 
@@ -70,7 +77,7 @@ nonisolated enum CareGateRule {
 
 // MARK: - 取数适配器
 
-/// 从仓库把数据取出来交给 CareGateRule。**自己不含任何判断**。
+/// 从仓库把数据取出来交给 CareGateRule。**自己不含任何判断**，只做日历换算。
 @MainActor
 final class CareGate {
 
@@ -93,14 +100,18 @@ final class CareGate {
         let today = calendar.startOfDay(for: now)
         let start = calendar.date(byAdding: .day, value: -CareGateRule.windowDays, to: today) ?? today
 
+        // 距上条关怀退场过了几个自然天。两边都取 startOfDay 再相减，
+        // 这样「昨天退的」永远是 1，跟具体几点无关。
+        let daysSinceRetire = messages.lastRetiredAt().map {
+            calendar.dateComponents([.day], from: calendar.startOfDay(for: $0), to: today).day ?? 0
+        }
+
         // before: today —— 今天的蛋不算。appOpened 是跨天触发的，
         // 这会儿今天多半还没写日记，更没孵蛋。
         return CareGateRule.decide(
-            hasActiveCare: messages.active() != nil,
             eggsInWindow: Array(eggs.eggs(from: start, before: today).values),
             lastCheckedAt: checks.lastCheckedAt(),
-            lastRetiredAt: messages.lastRetiredAt(),
-            now: now
+            daysSinceLastRetire: daysSinceRetire
         )
     }
 }

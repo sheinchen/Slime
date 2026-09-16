@@ -15,31 +15,24 @@ final class CareEngine {
     
 
     private let gate: CareGate
-    private let eggs: DayEggStore
     private let messages: CareMessageStore
     private let checks: CareCheckStore
     private let ai: CareDeciding
-    private let calendar: Calendar
-    
-    
+
     init(gate: CareGate,
-         eggs: DayEggStore,
          messages: CareMessageStore,
          checks: CareCheckStore,
-         ai: CareDeciding,
-         calendar: Calendar = .current) {
+         ai: CareDeciding) {
         self.gate = gate
-        self.eggs = eggs
         self.messages = messages
         self.checks = checks
         self.ai = ai
-        self.calendar = calendar
     }
     
     func handle(_ event: CareEvent, now: Date = Date()) async {
 
-            // ① 先判退场。**必须在闸门之前** ——
-            //    否则那条早该走的关怀还占着「已有关怀挂着」，闸门第 0 条把自己永远挡死。
+            // ① 先判退场。**必须在闸门之前** —— 挂满 3 天的那条要先退掉，
+            //    否则 lastRetiredAt 不更新、冷却算错，而且会把一条过期的话发给 AI。
             retireIfNeeded(now: now)
 
             var check = CareCheckRecord(checkedAt: now)
@@ -68,10 +61,10 @@ final class CareEngine {
         var check = check
         check.aiCalled = true
         let began = Date()
+        
 
         do {
-            let decision = try await ai.decideCare(window: window,
-                                                   recentlySaid: messages.recentTexts(limit: 3))
+            let decision = try await ai.decideCare(window: window, recentlySaid: messages.recentCares(limit: 3))
             check.latencyMs = Int(Date().timeIntervalSince(began) * 1000)
             check.aiRaw = decision.raw
 
@@ -80,7 +73,8 @@ final class CareEngine {
                 return check
             }
 
-            // 第 8 步的产品边界层插在这里（去重、总开关、safety 分流）
+            // shouldShow: true 就是「换成新的」—— show() 会先把旧的退掉，
+            // 所以「替换」和「旧的退场」是同一个动作的两半。
             messages.show(text: decision.message,
                           referencedDates: decision.referencedDates,
                           now: now)
@@ -96,28 +90,26 @@ final class CareEngine {
         return check
     }
     
-    /// 退场规则只有两条，**谁先到算谁**。
-       private func retireIfNeeded(now: Date) {
-           guard let care = messages.active() else { return }
+    /// 关怀什么时候退场。
+    ///
+    /// **本地只剩「满 3 天必退」这一条兜底。**
+    /// 「这句话还贴不贴切」是语义判断，交给 AI —— 它每次都能看到挂着的那条
+    /// （recentCares 带着 stillShowing），自己判断要不要换成新的；
+    /// 要换的时候 show() 会把旧的退掉。所以「替换」就是旧的退场。
+    ///
+    /// 这条兜底不能删：AI 不可达时（断网、API 挂了），关怀不能永远挂在那儿。
+    ///
+    /// ⚠️ 已知缺口：AI 现在只能表达「保持」或「替换」，没法说「撤掉但不换新的」。
+    ///    所以一句略过时的话最多会多挂到第 3 天。等真觉得难受再上三元契约。
+    private func retireIfNeeded(now: Date) {
+        guard let care = messages.active() else { return }
 
-            // 规则②：生成后满 3 天，内容过保质期。用户停写日记时靠它兜底。
-            let deadline = care.createdAt.addingTimeInterval(Self.validity)
+        let deadline = care.createdAt.addingTimeInterval(Self.validity)
+        guard deadline <= now else { return }
 
-            // 规则①：关怀之后有了新蛋 —— 语境翻篇了。补蛋、手动孵都算，
-            //        只要这颗蛋代表的日子没落在关怀之前。
-            let careDay = calendar.startOfDay(for: care.createdAt)
-            let newEgg = eggs.firstEgg(bornAfter: care.createdAt,
-                                          forDayOnOrAfter: careDay)?.createdAt
-
-            // 「或」在这里就是两个时刻取 min
-            let death = min(deadline, newEgg ?? .distantFuture)
-
-            guard death <= now else { return }
-
-            // 记它**实际**死的那一刻，不是 now。
-            // 你隔一周才打开 App，这条三天前就该走的关怀不该被记成"今天退场"，
-            // 否则冷却又白等 3 天。
-            messages.retire(at: death)
-       }
+        // 记它**实际**死的那一刻，不是 now ——
+        // 隔一周才打开的话，记成「今天退场」会让冷却又白等一轮。
+        messages.retire(at: deadline)
+    }
 }
 

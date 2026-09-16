@@ -37,10 +37,19 @@ protocol CareDeciding {
     /// - Parameters:
     ///   - window: 近 14 天情绪时间线（一天一颗蛋，已按日期升序）
     ///   - recentlySaid: 最近说过的关怀，交给 AI 自己避免重复
-    func decideCare(window: MoodWindow, recentlySaid: [String]) async throws -> CareDecision
+    func decideCare(window: MoodWindow, recentlySaid: [PastCare]) async throws -> CareDecision
 }
 
-final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding {
+/// 聊天时把用户那句话提炼成检索意图:要不要翻旧日记、用什么词翻。
+protocol RecallIntentExtracting {
+    /// - Parameters:
+    ///   - message: 用户刚发的那句话
+    ///   - recentTurns: 最近几轮对话，只用来消解指代（「那件事」指的是哪件）
+    func extractRecallIntent(message: String,
+                             recentTurns: [AIChatMessage]) async throws -> RecallIntent
+}
+
+final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding, RecallIntentExtracting {
     
     //共享人设
     private static let persona = """
@@ -156,6 +165,39 @@ final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding {
         不诊断、不夸大、不保证事情一定会变好，也不使用“只有我懂你”等制造依赖的表达。
 
         这句话可能持续展示三天；优先选择安静、含蓄、重看不尴尬的说法。
+        
+        「最近对ta说过的话」里，状态是「此刻仍挂在用户眼前」的那句，用户现在正看着。
+        
+        上面「至少三个日期」「一两天的变化是较弱证据」这些门槛，针对的是**首次开口** ——
+        那时候没有任何背景，需要多天才能看出走向。
+
+        已经有关心挂着时，背景已经建立并且被回应过了。判断是否替换只看新证据是否指向明确变化：
+        一天清晰的转折（持续低落后明确好转、或明显加重）就足以替换，不必再等三天。
+        
+        存在当前关心时，shouldShow 表示“是否生成新消息替换当前消息”：
+
+        true：用户的当前状态已经发生实质变化，生成一句符合新状态的消息并替换当前消息。
+
+        false：没有实质变化，不生成新消息，继续保留当前消息。
+        
+        「说于」是那句话说出口的日期，「针对」是它当时已经回应过的那几天。
+
+        所以：日期在「说于」之后的内容才是新证据；「针对」里那几天已经被回应过，
+        
+        可以用来理解背景，但不能拿它们再触发一次替换。
+        判断是否替换时，以当前关心生成之后出现的内容作为新证据。更早的内容可以用于理解背景和判断变化，但不能单独触发替换。
+
+        以下情况属于实质变化：
+
+        情绪方向出现清晰转折，例如从低落转为持续好转，或从积极转为明显低落；
+
+        原有情绪明显加重或缓解，使当前消息已经不再贴合；
+
+        安全风险高于当前关心的安全等级。安全等级升高时应立即替换。
+
+        新写了一篇日记、表达方式不同、轻微起伏、原有状态继续延续，
+        或者困扰的来源/主题变了但情绪的方向和程度没变，都不属于实质变化 ——
+        当前那句话是含蓄的，主题换了它照样接得住。
 
         当 safety 为 concern 或 crisis 时，消息可以更长，但仍只写一个完整句子，并包含对应的求助引导。
 
@@ -251,7 +293,7 @@ final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding {
         return DayEggSummary(text: parsed.text, emotion: SlimeEmotion(rawValue: parsed.emotion) ?? .calm)
     }
     
-    func decideCare(window: MoodWindow, recentlySaid: [String]) async throws -> CareDecision {
+    func decideCare(window: MoodWindow, recentlySaid: [PastCare]) async throws -> CareDecision {
         guard !window.eggs.isEmpty else { throw AIError.emptyContent }
         let url = URL(string: AIConfig.baseURL + "/chat/completions")!
         var request = URLRequest(url: url)
@@ -289,6 +331,58 @@ final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding {
                                 raw: contentJSON)
     }
 
+    // MARK: - 检索意图提炼
+
+    func extractRecallIntent(message: String,
+                             recentTurns: [AIChatMessage]) async throws -> RecallIntent {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return .skip }
+
+        let url = URL(string: AIConfig.baseURL + "/chat/completions")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(AIConfig.apiKey)", forHTTPHeaderField: "Authorization")
+
+        // 带最近四轮。够消解「那件事」这类指代，也够它看出
+        // 自己前几轮是不是已经翻过一次旧账了 —— 那个判断没有别的依据，
+        // 就靠这几条历史。再多的话模型会去提炼整段对话的主题，而不是这一句。
+        var messages: [ChatRequest.Message] = [.init(role: "system", content: Self.recallIntentPrompt)]
+        messages += recentTurns.suffix(8).map { .init(role: $0.role, content: $0.content) }
+        messages.append(.init(role: "user", content: trimmed))
+
+        let body = ChatRequest(model: AIConfig.model,
+                               messages: messages,
+                               response_format: .init(type: "json_object"),
+                               temperature: 0.2,   // 提炼要的是稳定，不是创意
+                               stream: false)
+        request.httpBody = try JSONEncoder().encode(body)
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw AIError.badStatus
+        }
+        let completion = try JSONDecoder().decode(ChatCompletionResponse.self, from: data)
+        guard let contentJSON = completion.choices.first?.message.content,
+              let innerData = contentJSON.data(using: .utf8) else {
+            throw AIError.emptyContent
+        }
+        let parsed = try JSONDecoder().decode(RecallIntentDTO.self, from: innerData)
+
+        // 去空、去重、掐上限。模型偶尔把同一个词给两遍，
+        // 而重复的词在关键词那一路会被算成两次命中，凭空拔高那篇日记的排名。
+        var seen = Set<String>()
+        let keywords = (parsed.keywords ?? [])
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && seen.insert($0).inserted }
+            .prefix(8)
+
+        return RecallIntent(shouldRecall: parsed.shouldRecall && !keywords.isEmpty,
+                            keywords: Array(keywords),
+                            emotion: parsed.emotion.flatMap { SlimeEmotion(rawValue: $0) },
+                            raw: contentJSON)
+    }
+
     
     
     /// 把一天的几篇日记排成给模型看的样子:时间 + 情绪 + 原文。
@@ -298,24 +392,49 @@ final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding {
         }.joined(separator: "\n")
     }
     
-    private static func moodPayload(_ window: MoodWindow, recentlySaid: [String]) -> String {
-           struct Day: Encodable {
-               let date: String
-               let emotion: String
-               let summary: String
-           }
-           struct Payload: Encodable {
-               let recentWindow: [Day]
-               let cares: [String]
-           }
+    private static func moodPayload(_ window: MoodWindow, recentlySaid: [PastCare]) -> String {
+        struct Day: Encodable {
+            let date: String
+            let emotion: String
+            let summary: String
+        }
 
-           let payload = Payload(
-               recentWindow: window.eggs.map {
-                   Day(date: dayFormatter.string(from: $0.date),
-                       emotion: $0.emotion.rawValue,
-                       summary: $0.text)
-               },
-               cares: recentlySaid)
+        struct Said: Encodable {
+            let text: String
+            let status: String
+            let saidAt: String
+            let about: [String]
+
+            enum CodingKeys: String, CodingKey {
+                case text   = "说的"
+                case status = "状态"
+                case saidAt = "说于"
+                case about  = "针对"
+            }
+        }
+        struct Payload: Encodable {
+            let days: [Day]
+            let recentlySaid: [Said]
+
+            enum CodingKeys: String, CodingKey {
+                case days = "近14天"
+                case recentlySaid = "最近对ta说过的话"
+            }
+        }
+
+        let payload = Payload(
+            days: window.eggs.map {
+                Day(date: dayFormatter.string(from: $0.date),
+                    emotion: $0.emotion.rawValue,
+                    summary: $0.text)
+            },
+            recentlySaid: recentlySaid.map {
+            // 用文字而不是 true/false —— 模型读文字比读布尔值准
+            Said(text: $0.text,
+                 status: $0.stillShowing ? "此刻仍挂在用户眼前" : "已经撤下了",
+                 saidAt: dayFormatter.string(from: $0.saidAt),
+                 about: $0.about.map { dayFormatter.string(from: $0) })
+        })
 
            let encoder = JSONEncoder()
            encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
@@ -434,6 +553,43 @@ final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding {
     6. 永远不暴露你的判断依据(不出现"连续几篇""记录"这类词)。
     """
     
+    //MARK: - 检索意图 prompt
+    ///
+    /// ⚠️ 这段是**产品判断**，不是代码。
+    /// keywords 给得宽，捞回来的噪声就多;给得窄，换个说法就漏。
+    /// 改之前先跑 `RecallIntentEvalTests` 看 recall 往哪边动。
+    ///
+    /// 注意它**不带 persona** —— 这是内部工具调用，不是母鸡在说话。
+    /// 掺进人设只会让它开始咕咕，然后把 JSON 写歪。
+    private static let recallIntentPrompt = """
+        你在为一个中文日记 App 做检索前的意图提炼。用户刚对母鸡说了一句话，
+        你要判断值不值得去翻他过去写的日记，如果值得，用哪些词去翻。
+
+        只输出 JSON：
+        {"shouldRecall": true, "keywords": ["..."], "emotion": "tired"}
+
+        shouldRecall 怎么判
+        - 他在讲一件具体的事、一个具体的人、或者一种具体的感受 → true
+        - 纯寒暄（「在吗」「哈喽」）、对上一句的简单回应（「嗯」「是的」「好呀」）、
+          在问母鸡自己的事 → false
+        - 看一眼上面的对话:如果你最近几轮已经提起过 ta 以前的事,这次就克制,给 false。
+          除非 ta 自己在追问过去(「上次那个」「你还记得吗」「就是那件事」),
+          或者 ta 现在说的明显是另一件不相干的事。连着翻旧账,像在表演记忆力。
+        - 拿不准时倾向 true。捞回来用不用,是下一步的事。
+
+        keywords 怎么给
+        - 抽出这句话里的人、物、事，以及描述感受的词。
+        - **每个词都要扩成同义说法**，这条最重要：
+          组长 → 组长 领导 上司；累 → 累 疲惫 没劲；吵架 → 吵架 争执 闹掰
+        - 日记是**逐字匹配**的，所以只给短词，两三个字最好。
+          不要给「被组长批评」这种短语，它一个字都匹配不上。
+        - 3 到 8 个词，宁少勿滥 —— 词越多，捞回来的噪声越多。
+        - 不要给「今天」「最近」「事情」「感觉」这类到处都是的词。
+
+        emotion 是用户**此刻**的情绪，不是他正在回忆的往事的情绪。
+        只能从这六个里选一个：happy calm sad angry anxious tired
+        """
+
     private static let systemPrompt = persona + """
         你的任务:读用户这句碎碎念,判断情绪,并以内在自我的身份回一句暖心话。reply 只回一句,简短。
         情绪 emotion 只能从这六个里选一个:happy / calm / sad / angry / anxious / tired。
@@ -512,6 +668,12 @@ final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding {
         let text: String
     }
     
+    private struct RecallIntentDTO: Decodable {
+        let shouldRecall: Bool
+        let keywords: [String]?
+        let emotion: String?
+    }
+
     private struct CareDecisionDTO: Decodable {
            let shouldShow: Bool
            let message: String?

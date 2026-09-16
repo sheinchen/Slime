@@ -112,7 +112,8 @@ enum DebugSeeder {
     ///
     /// 注意跟以前的区别：以前要靠「【测试】前缀」保护你的真日记，
     /// 现在库本身就是隔离的，可以放心全清 —— 也就不会漏掉手动写的那些。
-    static func wipeAll(context: NSManagedObjectContext = CoreDataStack.shared.viewContext) {
+    static func wipeAll(keepCare: Bool = false,
+                        context: NSManagedObjectContext = CoreDataStack.shared.viewContext) {
         guard guardTestStore() else { return }
 
         let posts = (try? context.fetch(Post.fetchRequest())) ?? []
@@ -122,15 +123,19 @@ enum DebugSeeder {
         eggs.forEach { context.delete($0) }
 
         // 关怀那两张表也要清，否则改一次代码只能验一次：
+        // （keepCare 时跳过 —— 造「上次的关怀还挂着」那种多幕场景要用）
         // ① CareCheck 留着 → lastCheckedAt 是上次那一刻，而播种的蛋 createdAt 都在过去
         //    → 闸门条件①「自上次检查后没有新蛋」直接挡下。
         // ② 上次生成的关怀还挂着 → 闸门第 0 条挡；而播种的蛋触发不了退场
         //    （createdAt 在过去，不满足 > care.createdAt），只能干等 3 天保质期。
-        let messages = (try? context.fetch(CareMessage.fetchRequest())) ?? []
-        messages.forEach { context.delete($0) }
+        var messages: [CareMessage] = [], checks: [CareCheck] = []
+        if !keepCare {
+            messages = (try? context.fetch(CareMessage.fetchRequest())) ?? []
+            messages.forEach { context.delete($0) }
 
-        let checks = (try? context.fetch(CareCheck.fetchRequest())) ?? []
-        checks.forEach { context.delete($0) }
+            checks = (try? context.fetch(CareCheck.fetchRequest())) ?? []
+            checks.forEach { context.delete($0) }
+        }
 
         saveIfNeeded(context)
         print("🧹 清空测试库：\(posts.count) 篇日记、\(eggs.count) 颗蛋、\(messages.count) 条关怀、\(checks.count) 条检查日志")
@@ -139,8 +144,9 @@ enum DebugSeeder {
     /// 一步到位：清空 + 播种。手动测试最常用的入口。
     static func reset(to emotions: [SlimeEmotion],
                       withEggs: Bool,
-                      entriesPerDay: Int = 1) {
-        wipeAll()
+                      entriesPerDay: Int = 1,
+                      keepCare: Bool = false) {
+        wipeAll(keepCare: keepCare)
         seedHistory(emotions: emotions, withEggs: withEggs, entriesPerDay: entriesPerDay)
     }
 
@@ -168,6 +174,30 @@ enum DebugSeeder {
     private static func sampleEntry(_ emotion: SlimeEmotion, dayIndex: Int, n: Int) -> String {
         let base = sampleSummary(emotion, dayIndex: dayIndex)
         return n == 0 ? base : "\(base)(第 \(n + 1) 篇)"
+    }
+
+    /// 追加/覆盖某一天的蛋，**createdAt 刷成现在** —— 模拟「刚孵出来的新蛋」。
+    ///
+    /// 用来造第二幕的状态：上一幕生成的关怀还挂着，今天又有了一颗新蛋。
+    /// 那正是要验的场景 —— AI 会保持旧话还是换成新的。
+    /// 不动关怀表，所以必须配合 reset 的 keepCare 一起用。
+    static func hatchNow(daysAgo: Int,
+                         emotion: SlimeEmotion,
+                         text: String,
+                         calendar: Calendar = .current,
+                         context: NSManagedObjectContext = CoreDataStack.shared.viewContext) {
+        guard guardTestStore() else { return }
+        let today = calendar.startOfDay(for: Date())
+        guard let day = calendar.date(byAdding: .day, value: -daysAgo, to: today) else { return }
+
+        // upsert：那天已有蛋就覆盖。createdAt = 现在，闸门条件①靠它判「有新蛋」
+        let egg = existingEgg(for: day, in: context) ?? DayEgg(context: context)
+        egg.date = day
+        egg.text = text
+        egg.emotion = emotion.rawValue
+        egg.createdAt = Date()
+        saveIfNeeded(context)
+        print("🥚 刚孵出一颗蛋：\(daysAgo) 天前，\(emotion.rawValue) —— \(text)")
     }
 
     // MARK: - 私有

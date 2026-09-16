@@ -13,9 +13,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
     private var eggService: DayEggService?
+    private var recallIndex: RecallIndexService?
     private var careEngine: CareEngine?
     private var careChecks: CareCheckStore?
-    private weak var rootVC: RootPagerViewController?
+    private weak var rootVC: RootTabBarController?
+    
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         // scene 是一个 UIWindowScene(带屏幕的场景),转型失败就不往下走
@@ -33,12 +35,21 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         
         let chatRepo = CoreDataChatRepository()
         
+        // 模型只加载一次,两个 Service 共用。
+        // 45MB 的 Core ML 模型建两遍既慢又白占内存。
+        let embedder = try? TextEmbedder()
+        let recallIndex = embedder.map { RecallIndexService(posts: postRepo, embedder: $0) }
+        self.recallIndex = recallIndex
+        // 加载失败就是 nil,聊天照常跑,只是母鸡不会提起旧事。
+        let recallService = embedder.map {
+            RecallService(posts: postRepo, embedder: $0, ai: aiService)
+        }
+        
         let careChecks = CoreDataCareCheckStore()
         let careGate = CareGate(eggs: eggStore,
                                 messages: careMessages,
                                 checks: careChecks)
         let careEngine = CareEngine(gate: careGate,
-                                    eggs: eggStore,
                                     messages: careMessages,
                                     checks: careChecks,
                                     ai: aiService)
@@ -48,7 +59,29 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let squareVM = SquareViewModel(repository: postRepo, eggService: eggService)
         let homeVC = HomeViewController()
         homeVC.careViewModel = CareViewModel(messages: careMessages)
-        let rootVC = RootPagerViewController(pages: [homeVC,SquareViewController(viewModel: squareVM)])
+
+        // 图标先用 SF Symbols 占位 —— 换成自己的 icon 时只改这三个名字。
+        // 右边那个圆不是 tab，是动作入口，去哪由这里决定。
+        let rootVC = RootTabBarController(
+            pages: [homeVC, SquareViewController(viewModel: squareVM)],
+            icons: ["tree.fill", "calendar"],
+            accessoryIcon: "bubble.left.fill"
+        )
+
+        // 聊天现在有两个入口：首页点母鸡、tab 条右边那个圆。共用一份构造。
+        let makeChat: () -> UIViewController = {
+            let vm = ChatViewModel(origin: .direct,
+                                   chatRepo: chatRepo,
+                                   posts: postRepo,
+                                   aiService: aiService,
+                                   recall: recallService)
+            return ChatViewController(viewModel: vm)
+        }
+        homeVC.makeChatViewController = makeChat
+        rootVC.onAccessoryTap = { [weak rootVC] in
+            rootVC?.present(makeChat(), animated: true)
+        }
+
         homeVC.makeComposeViewController = { [weak rootVC] backdrop ,onClose in
             let vc =  ComposeViewController(viewModel: composeVM)
             vc.onClose = {
@@ -58,18 +91,27 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             vc.backdropImage = backdrop
             return vc
         }
-        homeVC.makeChatViewController = {
-            let vm = ChatViewModel(origin: .direct, chatRepo: chatRepo, posts: postRepo, aiService: aiService)
-            return ChatViewController(viewModel: vm)
-        }
-        
-      
         let navigationController = UINavigationController(rootViewController: rootVC)
         window.rootViewController = navigationController
         //测试seed
         #if DEBUG
         // 只在测试库上生效；正式库会被 DebugSeeder 自己挡掉，不用加判断。
-        DebugSeeder.reset(to: [.sad, .sad, .sad, .calm, .happy], withEggs: true)
+        //
+        // 两幕场景，用启动参数切（Edit Scheme → Run → Arguments）：
+        //  第一幕（不加参数）：清库 + 播 5 天低落 → 闸门放行 → AI 生成关怀 A
+        //  第二幕（加 -CareStep2）：保留 A，只把「昨天」重孵成 happy
+        //      → 上次的关怀还挂着 + 今天有新蛋 → 看 AI 是保持 A 还是换成新的
+        //  第三幕（加 -CareStep3）：保留上一幕的关怀，补一颗平淡的蛋
+        //      → 有新蛋能过闸门，但没有实质变化 → 看 AI 是否保持、本地是否不误退场
+        if CommandLine.arguments.contains("-CareStep3") {
+            DebugSeeder.hatchNow(daysAgo: 2, emotion: .calm,
+                                 text: "普通的一天，把手边的事做完了")
+        } else if CommandLine.arguments.contains("-CareStep2") {
+            DebugSeeder.hatchNow(daysAgo: 1, emotion: .happy,
+                                 text: "过了！晚上和朋友吃了顿好的")
+        } else {
+            DebugSeeder.reset(to: [.sad, .sad, .tired, .sad, .sad], withEggs: true)
+        }
         #endif
         // 3. 让 window 显示出来,并持有它(存到属性里,不然会被释放)
         window.makeKeyAndVisible()
@@ -117,6 +159,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             """)
         }
         #endif
+        
+        if let recallIndex {
+            Task { await recallIndex.backfill() }
+        }
     }
 
 

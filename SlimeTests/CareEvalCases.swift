@@ -21,7 +21,7 @@ nonisolated struct EvalCase {
     let days: [(daysAgo: Int, emotion: SlimeEmotion, summary: String)]
 
     /// 「最近对ta说过的话」。空数组 = 之前没说过。
-    let recentlySaid: [String]
+    let recentlySaid: [PastCare]
 
     /// 人工标注：这时候该不该开口。
     let expected: Bool
@@ -44,8 +44,17 @@ nonisolated struct EvalCase {
 nonisolated enum CareEvalCases {
 
     /// 上一条关怀说过的话，几个场景共用
-    private static let saidTired = "最近好像有点累呀，别硬撑着~"
-
+    /// 上一条关怀。放在「2 天前说的、针对 3~5 天前」——
+    /// 这样窗口最后一两天才是「新证据」，正好压在 #21~#24 要考的那条线上。
+    private static let saidTired: PastCare = {
+        let cal = Calendar.current
+        let today = cal.startOfDay(for: Date(timeIntervalSince1970: 1_757_000_000))
+        func day(_ ago: Int) -> Date { cal.date(byAdding: .day, value: -ago, to: today) ?? today }
+        return PastCare(text: "最近好像有点累呀，别硬撑着~",
+                        stillShowing: true,
+                        saidAt: day(2),
+                        about: [day(5), day(4), day(3)])
+    }()
     static let all: [EvalCase] = [
 
         // ────────────── 该说 · 低落走向 ──────────────
@@ -116,12 +125,10 @@ nonisolated enum CareEvalCases {
                         (2, .tired, "早上起不来，赖到中午"),
                         (1, .sad,   "是不是根本不适合干这行")],
                  recentlySaid: [saidTired],
-                 expected: true,
-                 rationale: "上次说的是「累」，这次冒出来的是「自我怀疑」—— 有新角度可接。"
-                          + "走向还在延续时沉默，会像走开了",
-
-        // 注：和 #20 成对。区别只在有没有新东西可说
-                ),
+                 expected: false,
+                 rationale: "【2026-09-09 改判：原标该说】和 #8 是同一类场景（工作压力 → 自我怀疑），"
+                          + "当初标反了。情绪方向没变、程度没加重，只是主题深化 —— 按「主题变化不构成替换」，"
+                          + "旧话「最近好像有点累呀」对「是不是不适合干这行」照样接得住"),
 
         EvalCase(id: 8, name: "性质变了",
                  days: [(4, .tired, "连着加班第四天"),
@@ -129,8 +136,10 @@ nonisolated enum CareEvalCases {
                         (2, .sad,   "忽然觉得，做这些到底图什么"),
                         (1, .sad,   "还是那个问题，想不明白")],
                  recentlySaid: [saidTired],
-                 expected: true,
-                 rationale: "从「身体累」变成了「意义感」，已经不是同一件事，上次说过不构成理由"),
+                 expected: false,
+                 rationale: "【2026-09-09 改判：原标该说】主题从「身体累」变成「意义感」，"
+                          + "但情绪的方向和程度没变，旧话「最近好像有点累呀」照样接得住。"
+                          + "只有转折或加重才让旧话失效 —— 主题变化不算"),
 
         // ────────────── 不说 · 太短 ──────────────
 
@@ -248,5 +257,48 @@ nonisolated enum CareEvalCases {
                  expected: false,
                  rationale: "和 #7 成对：同样是走向延续 + 上次说过，但这里没有任何新东西。"
                           + "这时候才该闭嘴 —— 再说一遍就是复读"),
+
+        // ────────────── C 方案专项：旧关怀还挂着时，该不该换 ──────────────
+        //
+        // 这四条测的是 C 的核心判断：「保持」还是「替换」。
+        // 现在 AI 还不知道旧的那条仍挂在用户眼前 —— 这一批先跑基线，
+        // 之后加上 stillShowing 再跑一次，就能单独看出「告诉它旧的还挂着」有没有用。
+
+        EvalCase(id: 21, name: "挂着旧话 + 明显转折",
+                 days: [(4, .sad,   "方案第三次被打回"),
+                        (3, .sad,   "开始怀疑自己是不是不行"),
+                        (2, .tired, "硬撑着改完了"),
+                        (1, .happy, "过了！晚上和朋友吃了顿好的")],
+                 recentlySaid: [saidTired],
+                 expected: true,
+                 rationale: "转折清楚，而且旧话「别硬撑着」现在读起来已经过时了 —— 该换"),
+
+        EvalCase(id: 22, name: "挂着旧话 + 只多了一天平淡记录",
+                 days: [(4, .sad,   "项目卡住了"),
+                        (3, .sad,   "还是没进展"),
+                        (2, .tired, "加班到很晚"),
+                        (1, .calm,  "普通的一天，没什么特别的")],
+                 recentlySaid: [saidTired],
+                 expected: false,
+                 rationale: "既不是转折也不是加重，只多了一天平淡。"
+                          + "这正是 C 想拿下的场景：不说 ≠ 晾着用户，旧的那句还挂着陪他"),
+
+        EvalCase(id: 23, name: "挂着旧话 + 情绪明显加重",
+                 days: [(3, .tired, "连着加班，累"),
+                        (2, .tired, "还是加班"),
+                        (1, .sad,   "撑不住了，在楼梯间坐了很久")],
+                 recentlySaid: [saidTired],
+                 expected: true,
+                 rationale: "从「累」到「撑不住」是明显加重，旧话那句「别硬撑着」已经接不住了"),
+
+        EvalCase(id: 24, name: "挂着旧话 + 困扰换了来源",
+                 days: [(3, .tired,   "工作忙得没停过"),
+                        (2, .anxious, "家里打电话来，又是那些事"),
+                        (1, .sad,     "夹在中间，谁都不好过")],
+                 recentlySaid: [saidTired],
+                 expected: false,
+                 rationale: "【2026-09-09 定案：原存疑】困扰来源换了（工作 → 家庭），"
+                          + "但「最近好像有点累呀」对家里的事照样适用 —— 旧话本身是含蓄泛用的。"
+                          + "和 #8 同一条规则：主题变化不构成替换理由"),
     ]
 }

@@ -18,24 +18,17 @@ final class CareGateRuleTests: XCTestCase {
         return DayEggRecord(date: day, text: "第 \(daysAgo) 天前", emotion: .calm, createdAt: day)
     }
 
-    /// 默认是「四个条件都满足」的健康场景，各条测试只改自己关心的那一个参数。
-    private func decide(hasActiveCare: Bool = false,
-                        eggs: [DayEggRecord]? = nil,
+    /// 默认是「三个条件都满足」的健康场景，各条测试只改自己关心的那一个参数。
+    private func decide(eggs: [DayEggRecord]? = nil,
                         lastCheckedAt: Date? = nil,
-                        lastRetiredAt: Date? = nil) -> CareGateResult {
+                        daysSinceLastRetire: Int? = nil) -> CareGateResult {
         CareGateRule.decide(
-            hasActiveCare: hasActiveCare,
             eggsInWindow: eggs ?? [egg(daysAgo: 1), egg(daysAgo: 2), egg(daysAgo: 3)],
             lastCheckedAt: lastCheckedAt,
-            lastRetiredAt: lastRetiredAt,
-            now: now)
+            daysSinceLastRetire: daysSinceLastRetire)
     }
 
-    // MARK: - 四条挡人的路
-
-    func test_有关怀挂着时不生成第二条() {
-        XCTAssertEqual(decide(hasActiveCare: true), .blocked(.careAlreadyShowing))
-    }
+    // MARK: - 三条挡人的路
 
     func test_没有新蛋时挡下() {
         // 蛋都是过去造的，上次检查就在刚才 → 没有新的
@@ -47,7 +40,8 @@ final class CareGateRuleTests: XCTestCase {
     }
 
     func test_冷却期内挡下() {
-        XCTAssertEqual(decide(lastRetiredAt: now.addingTimeInterval(-86_400)), .blocked(.cooling))
+        // 今天刚退的 = 0 天
+        XCTAssertEqual(decide(daysSinceLastRetire: 0), .blocked(.cooling))
     }
 
     // MARK: - 放行
@@ -70,18 +64,20 @@ final class CareGateRuleTests: XCTestCase {
     }
 
     func test_从没关怀过时不算在冷却中() {
-        XCTAssertNotEqual(decide(lastRetiredAt: nil), .blocked(.cooling))
+        XCTAssertNotEqual(decide(daysSinceLastRetire: nil), .blocked(.cooling))
     }
 
     // MARK: - 边界值与顺序
 
     func test_冷却正好满时放行() {
-        let 刚满三天 = now.addingTimeInterval(-CareGateRule.cooldown - 1)
-        guard case .pass = decide(lastRetiredAt: 刚满三天) else { return XCTFail("冷却满了该放行") }
+        // 正好等于 cooldownDays 是边界，要放行
+        guard case .pass = decide(daysSinceLastRetire: CareGateRule.cooldownDays) else {
+            return XCTFail("冷却满了该放行")
+        }
     }
 
-    func test_前置优先于其他条件() {
-        // 同时踩了「有关怀挂着」和「天数不足」，应该报前者
-        XCTAssertEqual(decide(hasActiveCare: true, eggs: []), .blocked(.careAlreadyShowing))
+    func test_没有新蛋优先于天数不足() {
+        // 同时踩了「没新蛋」和「天数不足」，应该报前者
+        XCTAssertEqual(decide(eggs: [], lastCheckedAt: now), .blocked(.noNewEgg))
     }
 }
