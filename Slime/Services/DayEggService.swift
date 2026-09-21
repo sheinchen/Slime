@@ -42,8 +42,8 @@ final class DayEggService {
     private var lastAttempt: [Date: Date] = [:]
     private let retryCooldown: TimeInterval = 30
 
-    /// 已经在路上的今日总结请求。prefetch 存进来，finish 取走。
-    private var todayTask: Task<DayEggSummary, Error>?
+    /// 已经在路上的今日总结请求，连同它是基于哪几篇日记发的。prefetch 存进来，finish 取走。
+    private var todayTask: (basis: [UUID], task: Task<DayEggSummary, Error>)?
 
     /// 默认参数表达式是在「非隔离」上下文里求值的，没法在那儿 new 主线程隔离的类型。
     /// 所以默认值给 nil，真正的构造放进 init 体内 —— 这里才是 @MainActor 的。
@@ -92,28 +92,70 @@ final class DayEggService {
     // MARK: - 今天（手动孵）
 
     /// 提前发起今天的总结 —— 用户按母鸡按到一半就调，让按压动画盖住网络延迟。
-    /// 重复调用安全：已经在路上就不会再发一次。
+    ///
+    /// 调完之后 todayTask 只有两种状态：nil，或者**基于今天现在这几篇**的请求。
+    /// 按到一半松手、去写了一篇（或删了一篇）再回来按，手上那份就过时了 ——
+    /// 拿它落库的话，蛋会漏掉新写的那篇；而且蛋比那篇晚，EggDebt 判不欠，永远补不回来。
+    /// 所以每次都比一下「基于哪几篇」，对不上就作废重发。重复调用仍然安全。
     func prefetchToday(now: Date = Date()) {
-        guard todayTask == nil else { return }
         let today = calendar.startOfDay(for: now)
-        guard let entries = grouped()[today], !entries.isEmpty else { return }
-        guard EggDebt.owes(latestEntryAt: entries.last?.createdAt,
-                           egg: eggs.egg(for: today)) else { return }
-        todayTask = Task { try await summarizer.summarizeDay(entries) }
+        guard let entries = grouped()[today], !entries.isEmpty,
+              EggDebt.owes(latestEntryAt: entries.last?.createdAt, egg: eggs.egg(for: today))
+        else {
+            dropTodayTask()                    // 今天没什么可孵的，手上那份也不该留
+            return
+        }
+
+        let basis = entries.map(\.id)
+        guard todayTask?.basis != basis else { return }   // 已经在路上，而且日记没变过
+
+        dropTodayTask()
+        todayTask = (basis, Task { try await summarizer.summarizeDay(entries) })
     }
 
     /// 等 prefetch 的结果并落库。没 prefetch 过会就地补发一次，所以单独调它也是对的。
+    /// 开头那次 prefetchToday 顺带把「基于的日记已经变了」的旧请求换掉。
     @discardableResult
     func finishToday(now: Date = Date()) async throws -> DayEggSummary {
         prefetchToday(now: now)
-        guard let task = todayTask else { throw EggError.nothingToSummarize }
+        guard let task = todayTask?.task else { throw EggError.nothingToSummarize }
         defer { todayTask = nil }              // 无论成败都清掉，失败后能重按
         let summary = try await task.value
         eggs.save(text: summary.text, emotion: summary.emotion, for: calendar.startOfDay(for: now))
         return summary
     }
 
+    // MARK: - 删日记之后
+
+    /// 删了日记，那天的蛋作废。蛋是当天日记的摘要缓存，源头变了缓存必须失效。
+    /// 之后交给 EggDebt：还有日记就判「欠」，删光了就什么都不欠 —— 孤儿蛋就是这么没的。
+    ///
+    /// 同步执行：调用方紧接着就要刷新界面，得让它立刻看到蛋没了。
+    ///
+    /// 今天的预取不用在这儿管：下次按母鸡时 prefetchToday 会发现「基于的日记」对不上，自己作废重发。
+    func invalidate(_ day: Date) {
+        eggs.delete(for: day)
+    }
+
+    /// 作废之后立刻把过去那天的蛋补回来。
+    /// 不等下次打开 App：`hatchAllPending` 只管 14 天内，更早的天会永远停在「还在孵」。
+    /// 今天不补 —— 今天的蛋永远是用户按母鸡按出来的。
+    /// - Returns: 补成功了没有。调用方据此决定要不要再刷一次界面。
+    func rehatch(_ day: Date, now: Date = Date()) async -> Bool {
+        guard day < calendar.startOfDay(for: now),
+              let entries = grouped()[day], !entries.isEmpty else { return false }
+        // 用户刚动手删的，不受 30 秒重试冷却限制
+        return await hatch(day, entries: entries, respectsCooldown: false)
+    }
+
     // MARK: - 私有
+
+    /// 作废手上的预取。cancel 只是通知网络请求可以停了（协作式取消，停不停看它自己）；
+    /// 真正保证它不会被拿去落库的是置 nil。
+    private func dropTodayTask() {
+        todayTask?.task.cancel()
+        todayTask = nil
+    }
 
     /// 孵一颗。重复调用安全。
     /// 失败返回 false 而不抛 —— 批量补蛋时不该被某一天的失败打断后面几天。

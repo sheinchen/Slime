@@ -43,15 +43,27 @@ final class RecallRuleTests: XCTestCase {
         XCTAssertEqual(hits.first?.document.text, "组长在会上批评了方案")
     }
 
-    func test_情绪同调分三档() {
-        // query 是 tired：同情绪 > 同为负向 > 正向（正向拿 0 分，不上榜）
+    func test_情绪不能单独创造候选() {
         let hits = RecallRule.rank(
             documents: [doc(daysAgo: 1, "甲", .happy),
                         doc(daysAgo: 2, "乙", .sad),
                         doc(daysAgo: 3, "丙", .tired)],
             query: RecallQuery(keywords: [], emotion: .tired))
 
-        XCTAssertEqual(hits.map(\.document.text), ["丙", "乙"])
+        XCTAssertTrue(hits.isEmpty, "只因为情绪相似就翻旧账，就是「为了回忆而回忆」")
+    }
+
+    func test_情绪只给已召回候选加分() {
+        let happyMatch = doc(daysAgo: 1, "组长找我聊了聊", .happy)
+        let tiredMatch = doc(daysAgo: 2, "组长让我重写", .tired)
+        let emotionOnly = doc(daysAgo: 3, "搬家累到没力气", .tired)
+
+        let hits = RecallRule.rank(
+            documents: [happyMatch, tiredMatch, emotionOnly],
+            query: RecallQuery(keywords: ["组长"], emotion: .tired))
+
+        XCTAssertEqual(hits.first?.document.id, tiredMatch.id)
+        XCTAssertFalse(hits.contains { $0.document.id == emotionOnly.id })
     }
 
     func test_向量那一路由外部注入() {
@@ -64,6 +76,22 @@ final class RecallRuleTests: XCTestCase {
             similarities: [old.id: 0.9, recent.id: 0.2])
 
         XCTAssertEqual(hits.first?.document.text, "半年前那件事")
+    }
+
+    func test_各路先截TopK再融合() {
+        let keywordWinner = doc(daysAgo: 1, "组长批评了方案")
+        let vectorWinner = doc(daysAgo: 2, "组长找我聊聊")
+
+        let hits = RecallRule.rank(
+            documents: [keywordWinner, vectorWinner],
+            query: RecallQuery(keywords: ["组长", "批评"], emotion: nil),
+            similarities: [keywordWinner.id: 0.1, vectorWinner.id: 0.9],
+            limit: 10,
+            channelLimit: 1)
+
+        let byID = Dictionary(uniqueKeysWithValues: hits.map { ($0.document.id, $0) })
+        XCTAssertEqual(byID[keywordWinner.id]?.ranks, [.keyword: 1])
+        XCTAssertEqual(byID[vectorWinner.id]?.ranks, [.vector: 1])
     }
 
     // MARK: - 融合
@@ -105,6 +133,18 @@ final class RecallRuleTests: XCTestCase {
         }
     }
 
+    func test_同分时不受候选输入顺序影响() {
+        let documents = [doc(daysAgo: 1, "组长"),
+                         doc(daysAgo: 2, "组长"),
+                         doc(daysAgo: 3, "组长")]
+        let query = RecallQuery(keywords: ["组长"], emotion: nil)
+
+        let forward = RecallRule.rank(documents: documents, query: query).map(\.document.id)
+        let reversed = RecallRule.rank(documents: Array(documents.reversed()), query: query).map(\.document.id)
+
+        XCTAssertEqual(forward, reversed)
+    }
+
     // MARK: - eval
 
     func test_检索eval() throws {
@@ -138,7 +178,7 @@ final class RecallRuleTests: XCTestCase {
 
         let n = Double(RecallEvalCorpus.cases.count)
         let header = """
-            检索 eval · baseline（关键词 + 情绪，向量未接）
+            检索 eval · baseline（关键词召回 + 情绪候选内加权，向量未接）
             用例 \(RecallEvalCorpus.cases.count) 条   语料 \(RecallEvalCorpus.entries.count) 篇   rrfK \(RecallRule.rrfK)
 
             平均 recall@5  \(fmt(recallSum / n))

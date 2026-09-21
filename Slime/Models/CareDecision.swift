@@ -19,6 +19,17 @@ nonisolated struct PastCare {
     let stillShowing: Bool
     let saidAt: Date
     let about: [Date]
+
+    /// 某颗蛋是不是这条关怀「之后」才出现的信息 —— 发给 AI 的 isNew 就是它算的。
+    ///
+    /// · **跨天看日期**：迟补的旧蛋孵出时刻很新、内容很旧，按孵出时刻会被误标成新
+    /// · **关怀当天看孵出时刻**：日记只能写进今天，这颗蛋不可能是旧账；
+    ///   只按日期比又会漏掉「中午说了关怀、晚上重孵」和「昨晚说了关怀、今早才补上昨天的蛋」
+    func isNewEvidence(_ egg: DayEggRecord, calendar: Calendar = .current) -> Bool {
+        let careDay = calendar.startOfDay(for: saidAt)
+        if egg.date != careDay { return egg.date > careDay }
+        return egg.createdAt > saidAt
+    }
 }
 
 /// AI 决策层的结构化返回。

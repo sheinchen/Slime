@@ -106,10 +106,12 @@ final class CareGate {
             calendar.dateComponents([.day], from: calendar.startOfDay(for: $0), to: today).day ?? 0
         }
 
-        // before: today —— 今天的蛋不算。appOpened 是跨天触发的，
-        // 这会儿今天多半还没写日记，更没孵蛋。
+        // 窗口含今天。今天的蛋只在用户按住母鸡时才会出现 —— 那个动作本身就是「收束今天」，
+        // 不是半成品。而评估只在 sceneDidBecomeActive 时跑，所以在 App 里连续写日记、孵蛋，
+        // 关怀不会当场冒出来，要切走再回来才会评估。
+        let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? today
         return CareGateRule.decide(
-            eggsInWindow: Array(eggs.eggs(from: start, before: today).values),
+            eggsInWindow: Array(eggs.eggs(from: start, before: tomorrow).values),
             lastCheckedAt: checks.lastCheckedAt(),
             daysSinceLastRetire: daysSinceRetire
         )

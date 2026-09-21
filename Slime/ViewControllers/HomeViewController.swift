@@ -159,10 +159,22 @@ final class HomeViewController: UIViewController {
             careCard.isHidden = true
             view.addSubview(careCard)
             careCard.snp.makeConstraints {
-                // 贴着头部那行小字下面，和它左右对齐；岛在 y=352，中间这块空着正好
+                // 贴着头部那行小字下面，左边和它对齐；岛在 y=352，中间这块空着正好。
+                // 右边是「最多到」不是「等于」：气泡宽度跟着字走，一句短话就是个小泡泡
                 $0.top.equalTo(subLabel.snp.bottom).offset(26)
-                $0.leading.trailing.equalToSuperview().inset(34)
+                $0.leading.equalToSuperview().inset(34)
+                $0.trailing.lessThanOrEqualToSuperview().inset(34)
             }
+        }
+
+        /// 气泡的尾巴跟着母鸡走 —— 她在岛上溜达，话得是从她那儿冒出来的。
+        private func aimCareTail(dt: CFTimeInterval) {
+            // hen.center 就是她身体的中线（锚点 x = 0.5）。
+            // Rive 没加载出来就对准岛心，至少指着「那一片」
+            let henCenter = island.hen?.center ?? CGPoint(x: island.bounds.midX, y: 0)
+            // 母鸡的坐标是岛里的，要换算成气泡自己的坐标系
+            let x = island.convert(henCenter, to: careCard).x
+            careCard.aimTail(atX: x, dt: dt)
         }
 
         // MARK: - 关怀卡片的「单次露面」
@@ -207,13 +219,13 @@ final class HomeViewController: UIViewController {
         }
         
         private func updateCopy() {
-            dateLabel.attributedText = Kai.attributed(
+            dateLabel.attributedText = AppFont.attributed(
                 ChineseDate.title(), size: 38, color: Sky.ink, kern: 38 * 0.03, lineHeight: 38 * 1.15
             )
-            subLabel.attributedText = Kai.attributed(
+            subLabel.attributedText = AppFont.attributed(
                 laidToday ? "今天的蛋在巢里了" : "巢是空的", size: 16, color: Sky.ink(0.42)
             )
-            hintLabel.attributedText = Kai.attributed(
+            hintLabel.attributedText = AppFont.attributed(
                 laidToday ? "往左滑，看这一周" : "轻点鸟巢", size: 15, color: Sky.ink(0.4)
             )
             island.setNestHintVisible(!laidToday)
@@ -319,7 +331,8 @@ final class HomeViewController: UIViewController {
             let dt = min(link.timestamp - lastTimestamp, 1.0 / 20.0)
             lastTimestamp = link.timestamp
             island.tick(dt: dt)
-            
+            if showingCareId != nil { aimCareTail(dt: dt) }
+
             
         }
         

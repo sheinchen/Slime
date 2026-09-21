@@ -30,12 +30,18 @@ nonisolated struct EvalCase {
     /// 而分数动了之后要回来看的就是这一列。
     let rationale: String
 
+    /// 蛋的孵出时刻 = 那天零点 + N 小时。key 是 daysAgo，没写的就是零点。
+    /// 用来造「当天晚上重孵」「隔天早上才补上」「几天后才补上的旧蛋」—— isNew 就看它。
+    /// 放在最后并给默认值，前 24 条场景不用改。
+    var hatchedHour: [Int: Int] = [:]
+
     /// 造出交给 AI 的窗口。用固定的 now，测试不能依赖「今天」。
     func window(now: Date, calendar: Calendar = .current) -> MoodWindow {
         let today = calendar.startOfDay(for: now)
         let eggs = days.map { d -> DayEggRecord in
             let day = calendar.date(byAdding: .day, value: -d.daysAgo, to: today) ?? today
-            return DayEggRecord(date: day, text: d.summary, emotion: d.emotion, createdAt: day)
+            let hatched = calendar.date(byAdding: .hour, value: hatchedHour[d.daysAgo] ?? 0, to: day) ?? day
+            return DayEggRecord(date: day, text: d.summary, emotion: d.emotion, createdAt: hatched)
         }
         return MoodWindow(eggs: eggs.sorted { $0.date < $1.date })
     }
@@ -43,18 +49,25 @@ nonisolated struct EvalCase {
 
 nonisolated enum CareEvalCases {
 
-    /// 上一条关怀说过的话，几个场景共用
+    /// 所有场景共用的「今天」。**必须和 CareEvalTests 里的 now 是同一个时间戳** ——
+    /// 两边要是不一致，测试会静悄悄地测错东西。
+    private static let today = Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_757_000_000))
+
+    /// 造一条还挂着的关怀：daysAgo 天前的 hour 点说的，针对 about 里那几天（也是 daysAgo）。
+    private static func said(_ text: String, daysAgo: Int, hour: Int, about: [Int]) -> PastCare {
+        let cal = Calendar.current
+        func day(_ ago: Int) -> Date { cal.date(byAdding: .day, value: -ago, to: today) ?? today }
+        let at = cal.date(byAdding: .hour, value: hour, to: day(daysAgo)) ?? day(daysAgo)
+        return PastCare(text: text, stillShowing: true, saidAt: at, about: about.map(day))
+    }
+
     /// 上一条关怀。放在「2 天前说的、针对 3~5 天前」——
     /// 这样窗口最后一两天才是「新证据」，正好压在 #21~#24 要考的那条线上。
-    private static let saidTired: PastCare = {
-        let cal = Calendar.current
-        let today = cal.startOfDay(for: Date(timeIntervalSince1970: 1_757_000_000))
-        func day(_ ago: Int) -> Date { cal.date(byAdding: .day, value: -ago, to: today) ?? today }
-        return PastCare(text: "最近好像有点累呀，别硬撑着~",
-                        stillShowing: true,
-                        saidAt: day(2),
-                        about: [day(5), day(4), day(3)])
-    }()
+    private static let saidTired = said("最近好像有点累呀，别硬撑着~", daysAgo: 2, hour: 0, about: [5, 4, 3])
+
+    /// #25~#29 用的旧话。刻意写成「硬撑 / 疲惫」主题，
+    /// 这样场景里「没变化」就是真的没变化，不会被读成主题变了。
+    private static let hardTimes = "这几天好像一直在硬撑，辛苦啦，咕咕陪着你~"
     static let all: [EvalCase] = [
 
         // ────────────── 该说 · 低落走向 ──────────────
@@ -125,10 +138,11 @@ nonisolated enum CareEvalCases {
                         (2, .tired, "早上起不来，赖到中午"),
                         (1, .sad,   "是不是根本不适合干这行")],
                  recentlySaid: [saidTired],
-                 expected: false,
-                 rationale: "【2026-09-09 改判：原标该说】和 #8 是同一类场景（工作压力 → 自我怀疑），"
-                          + "当初标反了。情绪方向没变、程度没加重，只是主题深化 —— 按「主题变化不构成替换」，"
-                          + "旧话「最近好像有点累呀」对「是不是不适合干这行」照样接得住"),
+                 expected: true,
+                 rationale: "上次说的是「累」，这次冒出来的是「自我怀疑」—— 旧话接不住，该换。"
+                          + "【改判记录：原标该说 → 09-09 改不说（主题变化不替换）→ 09-17 改回该说。"
+                          + "加了 isNew 之后，模型 5/5 稳定判替换，而且给出的新话具体不空洞；"
+                          + "09-09 那次改判是在 3 次采样、噪声很大时做的】"),
 
         EvalCase(id: 8, name: "性质变了",
                  days: [(4, .tired, "连着加班第四天"),
@@ -136,10 +150,9 @@ nonisolated enum CareEvalCases {
                         (2, .sad,   "忽然觉得，做这些到底图什么"),
                         (1, .sad,   "还是那个问题，想不明白")],
                  recentlySaid: [saidTired],
-                 expected: false,
-                 rationale: "【2026-09-09 改判：原标该说】主题从「身体累」变成「意义感」，"
-                          + "但情绪的方向和程度没变，旧话「最近好像有点累呀」照样接得住。"
-                          + "只有转折或加重才让旧话失效 —— 主题变化不算"),
+                 expected: true,
+                 rationale: "从「身体累」变成「做这些到底图什么」，已经不是同一件事，旧话「最近好像有点累呀」接不住。"
+                          + "【改判记录：原标该说 → 09-09 改不说 → 09-17 改回该说，理由同 #7】"),
 
         // ────────────── 不说 · 太短 ──────────────
 
@@ -296,9 +309,70 @@ nonisolated enum CareEvalCases {
                         (2, .anxious, "家里打电话来，又是那些事"),
                         (1, .sad,     "夹在中间，谁都不好过")],
                  recentlySaid: [saidTired],
+                 expected: true,
+                 rationale: "困扰来源从工作换成家里，而且「夹在中间，谁都不好过」已经是当前状态的重点，"
+                          + "「最近好像有点累呀」接不住。"
+                          + "【改判记录：原存疑 → 09-09 定不说 → 09-17 改回该说，理由同 #7】"),
+
+        // ────────────── isNew 专项：新证据藏在「孵出时刻」里 ──────────────
+        //
+        // 这几条的关键信息只有看孵出时刻才分得清新旧，只看日期会判错。
+        // #25 #27 #29 是 isNew 修掉的两个漏洞；#26 防「一看到 isNew 就换」；
+        // #28 防反方向 —— 只看孵出时刻会把迟补的旧账误当新证据。
+
+        EvalCase(id: 25, name: "当天晚上重孵出转折",
+                 days: [(3, .sad,   "方案又被退回来，改到很晚"),
+                        (2, .sad,   "开会被当众挑了毛病，一下午没缓过来"),
+                        (1, .tired, "撑着做完，什么都不想说"),
+                        (0, .happy, "终于定稿了！下班和朋友去吃烤肉，笑了一晚上")],
+                 recentlySaid: [said(hardTimes, daysAgo: 0, hour: 12, about: [3, 2, 1])],
+                 expected: true,
+                 rationale: "中午说关怀时今天还没蛋，晚上 18 点孵出明显转折，旧话「一直在硬撑」过时了。"
+                          + "漏洞一：蛋和关怀同一天，只看日期会被当成背景漏掉",
+                 hatchedHour: [0: 18]),
+
+        EvalCase(id: 26, name: "当天晚上重孵，但没变化",
+                 days: [(3, .tired, "连着加班，累"),
+                        (2, .tired, "还是加班，回家倒头就睡"),
+                        (1, .tired, "加班到很晚"),
+                        (0, .tired, "今天也在加班，就这样吧")],
+                 recentlySaid: [said(hardTimes, daysAgo: 0, hour: 12, about: [3, 2, 1])],
                  expected: false,
-                 rationale: "【2026-09-09 定案：原存疑】困扰来源换了（工作 → 家庭），"
-                          + "但「最近好像有点累呀」对家里的事照样适用 —— 旧话本身是含蓄泛用的。"
-                          + "和 #8 同一条规则：主题变化不构成替换理由"),
+                 rationale: "今天的蛋 isNew 为真，但内容是原来的疲惫延续，旧话接得住。"
+                          + "防的是「一看到 isNew 就换」—— 上一轮 prompt 就踩过这个",
+                 hatchedHour: [0: 18]),
+
+        EvalCase(id: 27, name: "昨晚说了关怀，昨天的蛋今早才补上",
+                 days: [(3, .tired, "连着加班，累"),
+                        (2, .tired, "还是加班，回家倒头就睡"),
+                        (1, .sad,   "撑不住了，半夜一个人在楼道里坐了很久")],
+                 recentlySaid: [said(hardTimes, daysAgo: 1, hour: 20, about: [3, 2])],
+                 expected: true,
+                 rationale: "关怀是昨晚 8 点说的，那时昨天还没孵蛋；今早 8 点补蛋才孵出「撑不住」，明显加重。"
+                          + "漏洞二：蛋的日期和关怀同一天，只看日期会被当成已回应的背景",
+                 hatchedHour: [1: 32]),
+
+        EvalCase(id: 28, name: "迟补的旧蛋不算新证据",
+                 days: [(5, .sad,   "和朋友闹了别扭，心里很不是滋味"),
+                        (4, .tired, "连着加班，累"),
+                        (3, .tired, "还是加班"),
+                        (1, .tired, "加班，没什么别的")],
+                 recentlySaid: [said(hardTimes, daysAgo: 2, hour: 20, about: [4, 3])],
+                 expected: false,
+                 rationale: "5 天前那颗孵失败、今早 9 点才补上：孵出时刻最新，内容却在关怀之前。"
+                          + "关怀之后真正新的只有昨天的加班延续 → 不换。"
+                          + "只按孵出时刻判新旧的话，这条旧账会被当成新证据去触发替换",
+                 hatchedHour: [5: 5 * 24 + 9]),
+
+        EvalCase(id: 29, name: "被关怀引用过的今天，晚上重孵出转折",
+                 days: [(2, .sad,   "方案又被退回来，改到很晚"),
+                        (1, .tired, "撑着做完，什么都不想说"),
+                        (0, .happy, "下午突然过了！晚上去吃了顿好的，整个人松下来了")],
+                 recentlySaid: [said(hardTimes, daysAgo: 0, hour: 12, about: [2, 1, 0])],
+                 expected: true,
+                 rationale: "中午那句关怀已经引用过今天上午的蛋（今天在「针对」里），晚上 19 点重孵成明显转折。"
+                          + "这条专门测一个 prompt 冲突：prompt 说「isNew: false 的内容（包括针对里那几天）」，"
+                          + "暗示针对里的天都不新，但这天 isNew 为真。看模型信哪个",
+                 hatchedHour: [0: 19]),
     ]
 }

@@ -30,6 +30,8 @@ final class ChatViewController: UIViewController {
 
     /// 列表顶部的渐隐。飘到上面的旧消息化进底色，而不是在屏幕边缘被硬切一刀。
     private let fadeMask = CAGradientLayer()
+    /// 渐隐区占列表高度的比例
+    private static let fadeRatio: CGFloat = 0.2
 
     private let inputBar = UIView()
 
@@ -39,11 +41,7 @@ final class ChatViewController: UIViewController {
         tv.textColor = ChatPalette.text
         tv.textContainerInset = UIEdgeInsets(top: 10, left: 6, bottom: 10, right: 6)
         tv.isScrollEnabled = false
-        if let d = UIFont.systemFont(ofSize: 16).fontDescriptor.withDesign(.rounded) {
-            tv.font = UIFont(descriptor: d, size: 16)
-        } else {
-            tv.font = .systemFont(ofSize: 16)
-        }
+        tv.font = AppFont.font(16)
         return tv
     }()
 
@@ -59,11 +57,7 @@ final class ChatViewController: UIViewController {
         let l = UILabel()
         l.text = "说点什么"
         l.textColor = ChatPalette.inputHint
-        if let d = UIFont.systemFont(ofSize: 16).fontDescriptor.withDesign(.rounded) {
-            l.font = UIFont(descriptor: d, size: 16)
-        } else {
-            l.font = .systemFont(ofSize: 16)
-        }
+        l.font = AppFont.font(16)
         return l
     }()
 
@@ -74,6 +68,18 @@ final class ChatViewController: UIViewController {
                    for: .normal)
         b.tintColor = .white
         b.backgroundColor = Palette.beak
+        b.layer.cornerRadius = 19
+        return b
+    }()
+
+    /// 全屏盖上来之后没有下滑关闭的手势了（那是 pageSheet 才有的），必须自己给个出口
+    private let closeButton: UIButton = {
+        let b = UIButton(type: .custom)
+        b.setImage(UIImage(systemName: "chevron.down",
+                           withConfiguration: UIImage.SymbolConfiguration(pointSize: 16, weight: .semibold)),
+                   for: .normal)
+        b.tintColor = ChatPalette.text
+        b.backgroundColor = ChatPalette.inputField
         b.layer.cornerRadius = 19
         return b
     }()
@@ -99,6 +105,10 @@ final class ChatViewController: UIViewController {
     init(viewModel: ChatViewModel) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
+        // 盖满整屏，底下的首页和浮动 tab 条都看不见。
+        // 写在这里而不是调用方：关闭按钮是按「全屏」设计的，两者绑在一起，
+        // 首页点母鸡、tab 条右边的圆两个入口就不用各设一遍
+        modalPresentationStyle = .fullScreen
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
@@ -112,6 +122,7 @@ final class ChatViewController: UIViewController {
         applySnapshot(animated: false)
 
         sendButton.addTarget(self, action: #selector(sendTapped), for: .touchUpInside)
+        closeButton.addTarget(self, action: #selector(closeTapped), for: .touchUpInside)
         inputTextView.delegate = self
     }
 
@@ -180,7 +191,15 @@ final class ChatViewController: UIViewController {
             make.width.height.equalTo(38)
         }
 
-        // 3. 气泡列表夹在中间，背景透明，母鸡透过来
+        // 3. 左上角关闭。气泡列表从它下面开始，母鸡说的话靠左，不然第一条会压在按钮底下
+        view.addSubview(closeButton)
+        closeButton.snp.makeConstraints { make in
+            make.leading.equalToSuperview().inset(16)
+            make.top.equalTo(view.safeAreaLayoutGuide).offset(6)
+            make.width.height.equalTo(38)
+        }
+
+        // 4. 气泡列表夹在中间，背景透明，母鸡透过来
         collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
         collectionView.backgroundColor = .clear
         collectionView.delegate = self
@@ -188,13 +207,13 @@ final class ChatViewController: UIViewController {
         collectionView.keyboardDismissMode = .interactive
         view.insertSubview(collectionView, belowSubview: inputBar)
         collectionView.snp.makeConstraints { make in
-            make.top.equalTo(view.safeAreaLayoutGuide).offset(8)
+            make.top.equalTo(closeButton.snp.bottom).offset(4)
             make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(inputBar.snp.top).offset(-6)
         }
 
-        fadeMask.colors = [UIColor.clear.cgColor, UIColor.black.cgColor]
-        fadeMask.locations = [0, 0.2]
+        // colors 不在这里设 —— 顶端淡多少是随滚动变的，只有 updateFadeMask 一个出口
+        fadeMask.locations = [0, NSNumber(value: Double(Self.fadeRatio))]
         fadeMask.startPoint = CGPoint(x: 0.5, y: 0)
         fadeMask.endPoint = CGPoint(x: 0.5, y: 1)
         collectionView.layer.mask = fadeMask
@@ -202,11 +221,24 @@ final class ChatViewController: UIViewController {
 
     /// mask 挂在 layer 上，坐标系是内容坐标系 —— 列表一滚它就跟着内容跑掉了。
     /// 所以每次滚动都把它拉回可视区域，让渐隐永远贴在屏幕顶部。
+    ///
+    /// **渐隐的深浅跟着「上面藏了多少」走。** 消息是从顶往下排的，刚开场只有一两条时
+    /// 它们正好落在渐隐区里 —— 上面明明什么都没藏，却被淡得快看不见。
+    /// 所以顶到头时完全不淡，往上滚了多少淡多少，滚过一整个渐隐区才是全淡。
+    /// 顺带滚动时是连续过渡的，不会突然「啪」一下变淡。
     private func updateFadeMask() {
+        // 顶到头时 contentOffset.y = -adjustedContentInset.top，两者相加 = 0
+        let hiddenAbove = collectionView.contentOffset.y + collectionView.adjustedContentInset.top
+        let fadeHeight = collectionView.bounds.height * Self.fadeRatio
+        let strength = fadeHeight > 0 ? min(max(hiddenAbove / fadeHeight, 0), 1) : 0
+
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         fadeMask.frame = CGRect(origin: CGPoint(x: 0, y: collectionView.contentOffset.y),
                                 size: collectionView.bounds.size)
+        // mask 只看 alpha：顶端 alpha = 1 - strength，strength 为 0 就是不淡
+        fadeMask.colors = [UIColor.black.withAlphaComponent(1 - strength).cgColor,
+                           UIColor.black.cgColor]
         CATransaction.commit()
     }
 
@@ -291,6 +323,12 @@ final class ChatViewController: UIViewController {
 
         inputHeightConstraint?.update(offset: clamped)
         UIView.animate(withDuration: 0.15) { self.view.layoutIfNeeded() }
+    }
+
+    // MARK: - 关闭
+
+    @objc private func closeTapped() {
+        dismiss(animated: true)
     }
 
     // MARK: - 发送 / 重试

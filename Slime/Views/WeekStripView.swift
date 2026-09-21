@@ -65,9 +65,14 @@ final class WeekStripView: UIView {
         dataSource.apply(snapshot, animatingDifferences: false)
 
         if let index {
-            pendingJump = index
-            jumpIfPossible()
+            jump(to: index)
         }
+    }
+
+    /// 只挪位置、不换数据。月历收起前用 —— 周条要在重新显出来之前就停到对的那周。
+    func jump(to index: Int) {
+        pendingJump = index
+        jumpIfPossible()
     }
 
     // MARK: - 搭建

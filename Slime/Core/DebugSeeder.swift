@@ -27,7 +27,7 @@ enum DebugSeeder {
     /// 只有跑在测试库上才放行。
     /// 这是最后一道防线：即使有人在 Debug 构建里误调了播种，
     /// 只要 Scheme 没开 -UseTestStore，就碰不到真数据。
-    private static func guardTestStore(_ caller: String = #function) -> Bool {
+    static func guardTestStore(_ caller: String = #function) -> Bool {
         switch CoreDataStack.shared.mode {
         case .testFile, .inMemory:
             return true
@@ -209,7 +209,7 @@ enum DebugSeeder {
         return try? context.fetch(request).first
     }
 
-    private static func saveIfNeeded(_ context: NSManagedObjectContext) {
+    static func saveIfNeeded(_ context: NSManagedObjectContext) {
         guard context.hasChanges else { return }
         do { try context.save() } catch { print("播种保存失败: \(error)") }
     }

@@ -62,6 +62,14 @@ class NestStageView: UIView {
     private var eggHasLanded = false
     /// 总结比蛋先回来时先存这儿，等落定再揭晓。
     private var pendingReveal: SlimeEmotion?
+
+    // MARK: - 重孵过渡
+
+    /// 台上现在摆的是哪天。configure 靠它认出「还是同一天、只是状态变了」——
+    /// 删了一篇 → 表情淡掉；重孵回来 → 播揭晓。换了一天就直接重摆，不演。
+    private var shownDate: Date?
+    /// 台上是不是那颗重孵中的绿壳
+    private var isShowingRehatch = false
     
     /// 今天能不能下蛋（有没有日记、是不是已经下过）。返回 false 就按不动。
     var canLay: (() -> Bool)?
@@ -76,7 +84,9 @@ class NestStageView: UIView {
         super.init(frame: frame)
         
         imageView.contentMode = .scaleAspectFit
-        captionLabel.textAlignment = .center
+        // 蛋的总结 prompt 要求 ≤25 字，但模型常超；这个字号一行只放得下 21 字左右。
+        // 两行 ≈ 42 字，正常都放得下；真超了末尾省略号，不会再伸出屏幕。
+        captionLabel.numberOfLines = 2
         addSubview(imageView)
         addSubview(eggView)
         addSubview(captionLabel)
@@ -87,9 +97,11 @@ class NestStageView: UIView {
             sizeConstraint = make.height.equalTo(Self.henSide).constraint
             make.width.equalTo(imageView.snp.height)
         }
+        // 以前只有 centerX、没有左右边，长句子会一直往两边伸出屏幕。
+        // 比卡片（22）再往里收一点 —— 居中的两行字太宽读着累。
         captionLabel.snp.makeConstraints { make in
             make.top.equalTo(imageView.snp.bottom).offset(10)
-            make.centerX.equalToSuperview()
+            make.leading.trailing.equalToSuperview().inset(32)
             make.bottom.lessThanOrEqualToSuperview()
         }
         
@@ -140,18 +152,34 @@ class NestStageView: UIView {
     // MARK: - 摆台
     
     func configure(_ day: SquareViewModel.Day) {
+        let sameDay = day.date == shownDate
+        shownDate = day.date
+
+        // 同一天，绿壳 → 新蛋（重孵回来了）：不重摆，就地揭晓。
+        // 跟今天按母鸡孵出来是同一个动画，读起来是「想好了」
+        if sameDay, isShowingRehatch, !day.isRehatching, let egg = day.egg {
+            isShowingRehatch = false
+            eggView.reveal(to: egg.emotion)
+            showCaption(egg.text, size: 15, alpha: 0.42, animated: true)
+            return
+        }
+
         resetStage()
-        
-        if let egg = day.egg, !(day.isToday && day.needsHatch) {
+
+        if day.isRehatching {
+            // 同一天从情绪蛋变过来（刚删了一篇）才淡；切到一个正在重孵的日子就直接摆
+            showRehatchEgg(animated: sameDay)
+            showCaption("重新孵一下…", size: 14, alpha: 0.34, animated: sameDay)
+        } else if let egg = day.egg, !(day.isToday && day.needsHatch) {
             showEgg(egg.emotion)
-            captionLabel.attributedText = Kai.attributed(egg.text, size: 15, color: Sky.ink(0.42), lineHeight: 15 * 1.6)
+            showCaption(egg.text, size: 15, alpha: 0.42)
         } else if day.isToday {
             showHen()
-            captionLabel.attributedText = Kai.attributed("今天还在继续", size: 14, color: Sky.ink(0.34))
+            showCaption("今天还在继续", size: 14, alpha: 0.34)
         } else {
             //to:do 石化母鸡
             showPlaceholder()
-            captionLabel.attributedText = Kai.attributed(day.hasEntries ? "还在孵" : "你没有理我 咕咕呜呜", size: 14, color: Sky.ink(0.28))
+            showCaption(day.hasEntries ? "还在孵" : "你没有理我 咕咕呜呜", size: 14, alpha: 0.28)
         }
     }
     
@@ -175,6 +203,28 @@ class NestStageView: UIView {
         setNeedsLayout()
     }
     
+    /// 删了一篇、正在重孵：跟情绪蛋同一个绿壳，只是没表情。
+    /// 摆法跟 showEgg 一样（124 见方、居中、撑着 caption），只换了图。
+    private func showRehatchEgg(animated: Bool) {
+        imageView.image = nil
+        imageView.alpha = 0
+        sizeConstraint.update(offset: Self.eggSide)
+        eggView.isHidden = false
+        eggHasLanded = true              // 揭晓要等「落定」，这颗本来就在台上
+        isHen = false
+        isShowingRehatch = true
+        setNeedsLayout()
+
+        let apply = {
+            self.eggView.blankStyle = .rehatch
+            self.eggView.isBlank = true
+            self.eggView.emotion = nil
+        }
+        // 换图用交叉淡化：旧表情慢慢隐掉，壳子看着没动
+        guard animated else { return apply() }
+        UIView.transition(with: eggView, duration: 0.3, options: .transitionCrossDissolve, animations: apply)
+    }
+
     private func showPlaceholder() {
         imageView.image = nil
         imageView.alpha = 1
@@ -194,6 +244,9 @@ class NestStageView: UIView {
         isLaying = false
         eggHasLanded = false
         pendingReveal = nil
+        isShowingRehatch = false
+        // 按母鸡下出来的空白蛋是米白的；只有重孵那条路会换成绿壳
+        eggView.blankStyle = .fresh
         setNeedsLayout()
     }
     
@@ -402,6 +455,33 @@ class NestStageView: UIView {
     }
     
     func setCaption(_ text: String) {
-        captionLabel.attributedText = Kai.attributed(text, size: 15, color: Sky.ink(0.42), lineHeight: 15 * 1.6)
+        showCaption(text, size: 15, alpha: 0.42)
+    }
+
+    /// 鸟巢下面那行字。四个入口（有蛋 / 今天 / 空白天 / 孵完揭晓）都走这里。
+    ///
+    /// 段落样式自己建，不用 `AppFont.attributed` 的行高参数：那边建出来的段落样式
+    /// 对齐是 `.natural`（靠左），而 attributedText 里的段落样式会压过 label 自己的
+    /// textAlignment —— 以前 label 跟文字一样宽看不出来，撑满宽度之后就靠左了。
+    private func showCaption(_ text: String, size: CGFloat, alpha: CGFloat, animated: Bool = false) {
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+        style.minimumLineHeight = size * 1.6
+        style.maximumLineHeight = size * 1.6
+        // 折行时别让最后一行只剩一两个字孤零零挂着
+        style.lineBreakStrategy = .pushOut
+        let apply = {
+            self.captionLabel.attributedText = NSAttributedString(string: text, attributes: [
+                .font: AppFont.font(size),
+                .foregroundColor: Sky.ink(alpha),
+                .paragraphStyle: style,
+            ])
+            // 超过两行时末尾省略号。**不能写进上面的段落样式** —— 截断模式一进段落样式，
+            // 文字就按单行排，numberOfLines 失效，而且不出省略号，整行居中从两边溢出去（实测）。
+            // 设在 label 上、而且要在赋 attributedText **之后**：赋值会把 label 的这些属性重置成段落样式里的。
+            self.captionLabel.lineBreakMode = .byTruncatingTail
+        }
+        guard animated else { return apply() }
+        UIView.transition(with: captionLabel, duration: 0.3, options: .transitionCrossDissolve, animations: apply)
     }
 }

@@ -41,6 +41,29 @@ final class EggView: UIImageView {
             updateImage()
         }
     }
+
+    /// 空白蛋画哪一种。
+    enum BlankStyle {
+        /// 刚下出来、还没揭晓 —— 米白色的壳
+        case fresh
+        /// 删了一篇、正在重孵 —— 跟情绪蛋同一个绿壳，只是表情隐去了。
+        /// 壳不变、表情先淡掉再浮出新的，读起来是「重新想了一下」，不是「蛋没了又回来」
+        case rehatch
+
+        var asset: String {
+            switch self {
+            case .fresh:   return "egg_blank"
+            case .rehatch: return "egg_green_blank"
+            }
+        }
+    }
+
+    var blankStyle: BlankStyle = .fresh {
+        didSet {
+            guard blankStyle != oldValue else { return }
+            updateImage()
+        }
+    }
     
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -62,7 +85,7 @@ final class EggView: UIImageView {
         if let emotion {
             image = UIImage(named: emotion.eggAsset)
         } else {
-            image = isBlank ? UIImage(named: "egg_blank") : nil
+            image = isBlank ? UIImage(named: blankStyle.asset) : nil
         }
     }
     

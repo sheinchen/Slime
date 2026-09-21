@@ -42,7 +42,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.recallIndex = recallIndex
         // 加载失败就是 nil,聊天照常跑,只是母鸡不会提起旧事。
         let recallService = embedder.map {
-            RecallService(posts: postRepo, embedder: $0, ai: aiService)
+            RecallService(posts: postRepo,
+                          embedder: $0,
+                          ai: aiService,
+                          reranker: aiService)
         }
         
         let careChecks = CoreDataCareCheckStore()
@@ -64,7 +67,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // 右边那个圆不是 tab，是动作入口，去哪由这里决定。
         let rootVC = RootTabBarController(
             pages: [homeVC, SquareViewController(viewModel: squareVM)],
-            icons: ["tree.fill", "calendar"],
+            icons: ["house.fill", "calendar"],
             accessoryIcon: "bubble.left.fill"
         )
 
@@ -103,7 +106,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         //      → 上次的关怀还挂着 + 今天有新蛋 → 看 AI 是保持 A 还是换成新的
         //  第三幕（加 -CareStep3）：保留上一幕的关怀，补一颗平淡的蛋
         //      → 有新蛋能过闸门，但没有实质变化 → 看 AI 是否保持、本地是否不误退场
-        if CommandLine.arguments.contains("-CareStep3") {
+        //
+        // 另有一套跟关怀无关的（加 -SeedDiaries）：21 天里 14 天有记录、每篇一件具体的事，
+        //  给验删除、卡片堆、周条、月历用。详见 DebugSeeder+Diaries.swift
+        if CommandLine.arguments.contains("-SeedDiaries") {
+            DebugSeeder.seedDiaries()
+        } else if CommandLine.arguments.contains("-CareStep3") {
             DebugSeeder.hatchNow(daysAgo: 2, emotion: .calm,
                                  text: "普通的一天，把手边的事做完了")
         } else if CommandLine.arguments.contains("-CareStep2") {
@@ -187,4 +195,3 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
 
 }
-

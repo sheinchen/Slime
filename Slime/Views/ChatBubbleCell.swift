@@ -29,12 +29,7 @@ final class ChatBubbleCell: UICollectionViewCell {
 
         label.numberOfLines = 0
         label.textColor = ChatPalette.text
-        // 圆体，配这套素材
-        if let d = UIFont.systemFont(ofSize: 16, weight: .medium).fontDescriptor.withDesign(.rounded) {
-            label.font = UIFont(descriptor: d, size: 16)
-        } else {
-            label.font = .systemFont(ofSize: 16, weight: .medium)
-        }
+        label.font = AppFont.font(16)
         bubble.addSubview(label)
 
         bubble.snp.makeConstraints { make in

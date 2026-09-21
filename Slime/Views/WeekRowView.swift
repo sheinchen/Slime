@@ -100,7 +100,7 @@ private final class DayCell: UIControl {
         switch style {
         case .strip:
             // 星期名在最上，蛋在中间，数字压在蛋的位置上 —— 有蛋时藏起来，没蛋时顶上
-            weekday.attributedText = Kai.attributed(weekdayName ?? "", size: 13,
+            weekday.attributedText = AppFont.attributed(weekdayName ?? "", size: 13,
                                                     color: Self.ink.withAlphaComponent(0.62))
             weekday.snp.makeConstraints { make in
                 make.top.centerX.equalToSuperview()
@@ -147,16 +147,25 @@ private final class DayCell: UIControl {
     func configure(_ day: SquareViewModel.Day, isSelected: Bool) {
         self.day = day
 
-        egg.emotion = day.egg?.emotion
-        egg.isHidden = day.egg?.emotion == nil
+        // 删了一篇、正在重孵的那天画没表情的绿壳 —— 照实画的话蛋会变回数字，几秒后又变回蛋。
+        // 格子会被复用，isBlank 每次都要显式给，不能只在重孵时设
+        egg.blankStyle = .rehatch
+        egg.isBlank = day.isRehatching
+        egg.emotion = day.isRehatching ? nil : day.egg?.emotion
+        // 月历里不属于这一页的日子（首行的上月末、末行的下月初）不画蛋：
+        // 同一天会在相邻两页各出现一次，只在它自己那个月里算数 ——
+        // 这一页的「情绪地图」里只该有这个月的蛋
+        egg.isHidden = day.isOutsideMonth || (!day.isRehatching && day.egg == nil)
         // 周条里蛋和数字抢同一个位置；月历里数字有自己的一行，永远显示
         number.isHidden = style == .strip ? !egg.isHidden : false
 
-        number.attributedText = Kai.attributed(
+        let inkAlpha: CGFloat = day.isOutsideMonth ? 0.28 : (day.isToday ? 0.95 : 0.66)
+        number.attributedText = AppFont.attributed(
             "\(day.number)", size: style == .strip ? 16 : 13,
-            color: Self.ink.withAlphaComponent(day.isToday ? 0.95 : 0.66)
+            color: Self.ink.withAlphaComponent(inkAlpha)
         )
-        highlight.isHidden = !isSelected
+        // 选中日落在邻月那几格时也不圈 —— 圈只画在它自己那一页上
+        highlight.isHidden = !isSelected || day.isOutsideMonth
 
         // 未来的日子不可点 —— 那天不可能有日记，选中它只会得到一个空列表。
         // UIControl 的 isEnabled 会直接挡掉 touch，不用自己判。

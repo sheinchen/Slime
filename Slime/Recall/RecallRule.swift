@@ -44,16 +44,38 @@ nonisolated enum RecallRule {
     static func rank(documents: [RecallDocument],
                      query: RecallQuery,
                      similarities: [UUID: Double] = [:],
-                     limit: Int = 5) -> [RecallHit] {
-        // 三路各自跑一遍，各自产出 [文档下标: 排名]
+                     limit: Int = 5,
+                     channelLimit: Int = 10) -> [RecallHit] {
+        guard limit > 0, channelLimit > 0 else { return [] }
+
+        // 关键词和向量负责「把候选捞上来」。每路先截断，再做 RRF：
+        // 向量对几乎每篇日记都有一个正分，不截断就会让尾部噪声也持续投票。
+        let keywordRanking = ranking(documents, limit: channelLimit) {
+            keywordScore($0, keywords: query.keywords)
+        }
+        let vectorRanking = ranking(documents, limit: channelLimit) {
+            similarities[$0.id] ?? 0
+        }
+
+        // 「都是难过」不等于「是同一件事」。情绪只能给已被关键词/向量
+        // 捞上来的候选加分，不能单独创造候选。
+        let candidateIndexes = Set(keywordRanking.keys).union(vectorRanking.keys)
+        guard !candidateIndexes.isEmpty else { return [] }
+
+        let emotionRanking = ranking(documents,
+                                     allowedIndexes: candidateIndexes,
+                                     limit: channelLimit) {
+            emotionScore($0, query.emotion)
+        }
+
         let rankings: [RecallChannel: [Int: Int]] = [
-            .keyword: ranking(documents) { keywordScore($0, keywords: query.keywords) },
-            .vector:  ranking(documents) { similarities[$0.id] ?? 0 },
-            .emotion: ranking(documents) { emotionScore($0, query.emotion) }
+            .keyword: keywordRanking,
+            .vector: vectorRanking,
+            .emotion: emotionRanking
         ]
 
         var hits: [RecallHit] = []
-        for (index, document) in documents.enumerated() {
+        for (index, document) in documents.enumerated() where candidateIndexes.contains(index) {
             var score = 0.0
             var ranks: [RecallChannel: Int] = [:]
 
@@ -63,14 +85,14 @@ nonisolated enum RecallRule {
                 score += 1.0 / (rrfK + Double(rank))
             }
 
-            // 三路都没捞到它，它就不是候选，别让它以零分混进来
-            guard !ranks.isEmpty else { continue }
             hits.append(RecallHit(document: document, score: score, ranks: ranks))
         }
 
         return Array(hits.sorted {
             if $0.score != $1.score { return $0.score > $1.score }
-            return $0.document.date > $1.document.date   // 同分时较新的在前
+            // 时间不参与排名。UUID 只用来让同分结果稳定，
+            // 避免候选原始顺序（生产里是新到旧）偷偷变成近因权重。
+            return $0.document.id.uuidString < $1.document.id.uuidString
         }.prefix(limit))
     }
     
@@ -97,14 +119,19 @@ nonisolated enum RecallRule {
     
     // MARK: - 打分转排名
     
-    private static func ranking(_ documents: [RecallDocument], score: (RecallDocument) -> Double) -> [Int: Int] {
+    private static func ranking(_ documents: [RecallDocument],
+                                allowedIndexes: Set<Int>? = nil,
+                                limit: Int,
+                                score: (RecallDocument) -> Double) -> [Int: Int] {
         let scored = documents.enumerated()
+                 .filter { allowedIndexes?.contains($0.offset) ?? true }
                  .map { (index: $0.offset, score: score($0.element)) }
                  .filter { $0.score > 0 }
                  .sorted {
                      if $0.score != $1.score { return $0.score > $1.score }
-                     return $0.index < $1.index
+                     return documents[$0.index].id.uuidString < documents[$1.index].id.uuidString
                  }
+                 .prefix(limit)
 
              var result: [Int: Int] = [:]
              for (position, item) in scored.enumerated() {

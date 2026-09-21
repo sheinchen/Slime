@@ -1,28 +1,19 @@
 import UIKit
 
-/// 设计稿用的是霞鹜文楷（LXGW WenKai），iOS 上没有。
-/// 系统里最接近的是楷体，退到衬线，再退到系统字 —— 一层层兜底，
-/// 免得换了系统版本就掉回黑体。
-enum Kai {
-    /// 系统里可能存在的楷体名字，按偏好排。
-    private static let candidates = [
-        "STKaitiSC-Regular",
-        "Kaiti SC",
-        "STKaiti",
-        "KaiTi",
-    ]
-
-    private static let resolved: String? = candidates.first { UIFont(name: $0, size: 12) != nil }
+/// 全 App 的字体：小赖字体（Xiaolai，SIL OFL 1.1，随包分发）。
+/// 字体文件在 Resources/Fonts/，靠 Info.plist 的 UIAppFonts 在启动时注册；
+/// 注册成功后按 PostScript 名 "Xiaolai" 就能取到。
+enum AppFont {
+    private static let name = "Xiaolai"
 
     static func font(_ size: CGFloat) -> UIFont {
-        if let name = resolved, let font = UIFont(name: name, size: size) {
+        if let font = UIFont(name: name, size: size) {
             return font
         }
-        let base = UIFont.systemFont(ofSize: size, weight: .regular)
-        if let serif = base.fontDescriptor.withDesign(.serif) {
-            return UIFont(descriptor: serif, size: size)
-        }
-        return base
+        // 取不到只可能是没打进包或 plist 没登记 —— 开发时直接叫出来，
+        // 上线时退回系统字，不至于整页空白。
+        assertionFailure("字体 \(name) 没注册上，检查 Info.plist 的 UIAppFonts 和 target 资源")
+        return .systemFont(ofSize: size)
     }
 
     /// 带字距的一行字。设计稿标题是 letter-spacing:.03em。

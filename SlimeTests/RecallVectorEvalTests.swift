@@ -35,7 +35,8 @@ final class RecallVectorEvalTests: XCTestCase {
         for d in documents { docVectors[d.id] = try embedder.embed(d.text) }
         let msPerDoc = Date().timeIntervalSince(started) / Double(documents.count) * 1000
 
-        let labels = ["baseline", "仅向量", "融合·不截断", "融合·向量top10", "融合·向量top5"]
+        let labels = ["baseline", "仅向量", "融合·不截断", "生产·每路top10",
+                      "融合·仅向量top10", "融合·仅向量top5"]
         var recallSums = [Double](repeating: 0, count: labels.count)
         var recall10Sums = [Double](repeating: 0, count: labels.count)
         var mrrSums = [Double](repeating: 0, count: labels.count)
@@ -53,19 +54,28 @@ final class RecallVectorEvalTests: XCTestCase {
 
             let runs = [
                 // 只有关键词和情绪，向量那一路传空字典
-                RecallRule.rank(documents: documents, query: c.query, limit: 20),
+                RecallRule.rank(documents: documents, query: c.query,
+                                limit: 20, channelLimit: documents.count),
                 // 只有向量：keywords 空、emotion nil，另两路自然全不上榜
                 RecallRule.rank(documents: documents,
                                 query: RecallQuery(keywords: [], emotion: nil),
-                                similarities: similarities, limit: 20),
+                                similarities: similarities, limit: 20,
+                                channelLimit: documents.count),
                 // 三路齐开，向量不截断：它对每篇都有正分，会贡献一个完整排名
                 RecallRule.rank(documents: documents, query: c.query,
-                                similarities: similarities, limit: 20),
+                                similarities: similarities, limit: 20,
+                                channelLimit: documents.count),
+                // 生产配置：关键词/向量各只保留前 10，情绪只给这些候选加分
+                RecallRule.rank(documents: documents, query: c.query,
+                                similarities: similarities, limit: 20,
+                                channelLimit: 10),
                 // 只让向量贡献它最有把握的前 10 / 前 5
                 RecallRule.rank(documents: documents, query: c.query,
-                                similarities: topK(similarities, 10), limit: 20),
+                                similarities: topK(similarities, 10), limit: 20,
+                                channelLimit: documents.count),
                 RecallRule.rank(documents: documents, query: c.query,
-                                similarities: topK(similarities, 5), limit: 20),
+                                similarities: topK(similarities, 5), limit: 20,
+                                channelLimit: documents.count),
             ]
 
             var cells: [String] = []
@@ -85,7 +95,7 @@ final class RecallVectorEvalTests: XCTestCase {
 
                 ── #\(c.id) \(c.name)
                    \(zip(labels, cells).map { "\($0) \($1)" }.joined(separator: "   "))
-                   融合·向量top10 的前 5 名
+                   生产·每路top10 的前 5 名
                 \(top5(runs[3], relevant: relevant))
                 """)
         }

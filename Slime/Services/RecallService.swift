@@ -5,17 +5,19 @@
 
 import Foundation
 
-/// 聊天时的检索编排：提炼 → 取候选 → 编码 → 融合。
+/// 聊天时的检索编排：提炼 → 取候选 → 编码 → 融合 → 重排。
 ///
 /// 跨了仓库、网络和本地模型，所以放 Services/，跟 `DayEggService` 同一层。
 /// 它**自己不做任何判断** —— 判断分别在 `RecallGate`（算术）、
-/// `extractRecallIntent`（语义）、`RecallRule`（融合）里，这层只负责把它们串起来。
+/// `extractRecallIntent`（语义）、`RecallRule`（融合）、
+/// `RecallReranking`（精排与否决）里，这层只负责把它们串起来。
 @MainActor
 final class RecallService {
 
     private let posts: PostRepository
     private let embedder: TextEmbedder
     private let ai: RecallIntentExtracting
+    private let reranker: RecallReranking
     private let calendar: Calendar
 
     /// 候选窗口。时间只在这儿用一次，**它是候选范围，不是排序权重**。
@@ -23,18 +25,19 @@ final class RecallService {
     /// 整套检索会退化成「最近 N 天」。
     private static let windowDays = 365
 
-    /// 最后交出去几条。检索层本身能给十来条，
-    /// 但母鸡一次记不住那么多事，给多了它会开始罗列。
-    /// 等 LLM 重排做出来之后，这里会改成先要 10 条再让它挑。
-    private static let topN = 3
+    /// 召回层要「宽」，先给重排 10 条；重排要「严」，最后只能交出 0...3 条。
+    private static let candidateLimit = 10
+    private static let finalLimit = 3
 
     init(posts: PostRepository,
          embedder: TextEmbedder,
          ai: RecallIntentExtracting,
+         reranker: RecallReranking,
          calendar: Calendar = .current) {
         self.posts = posts
         self.embedder = embedder
         self.ai = ai
+        self.reranker = reranker
         self.calendar = calendar
     }
 
@@ -70,11 +73,31 @@ final class RecallService {
             }
         }
 
-        // ④ 融合三路
-        return RecallRule.rank(documents: candidates.map(\.document),
-                               query: intent.query,
-                               similarities: similarities,
-                               limit: Self.topN)
+        // ④ 宽召回：每路先截断，RRF 交出 10 条候选。
+        let candidateHits = RecallRule.rank(documents: candidates.map(\.document),
+                                            query: intent.query,
+                                            similarities: similarities,
+                                            limit: Self.candidateLimit,
+                                            channelLimit: Self.candidateLimit)
+        guard !candidateHits.isEmpty else { return [] }
+
+        // ⑤ 严重排：可以一条都不选。任何网络/JSON 失败都 fail closed，
+        // 不能退回 candidateHits.prefix(3)，否则故障时又会变成「为了回忆而回忆」。
+        let outcome = await RecallRerankCoordinator.select(message: message,
+                                                           recentTurns: recentTurns,
+                                                           candidates: candidateHits,
+                                                           using: reranker,
+                                                           limit: Self.finalLimit)
+
+        #if DEBUG
+        if let error = outcome.errorDescription {
+            print("[Recall] 重排失败，本轮不提旧事: \(error)")
+        } else {
+            print("[Recall] 重排: \(candidateHits.count) 条候选 → \(outcome.hits.count) 条; \(outcome.reason)")
+        }
+        #endif
+
+        return outcome.hits
     }
 
     /// 向量在模型里已经做过 L2 归一化，点积就是余弦相似度。

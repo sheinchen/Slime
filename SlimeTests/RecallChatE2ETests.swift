@@ -56,7 +56,10 @@ final class RecallChatE2ETests: XCTestCase {
         let indexed = await index.backfill()
         XCTAssertEqual(indexed, samples.count, "该补的向量没补齐")
 
-        let recallService = RecallService(posts: posts, embedder: embedder, ai: ai)
+        let recallService = RecallService(posts: posts,
+                                          embedder: embedder,
+                                          ai: ai,
+                                          reranker: ai)
 
         // **措辞跟日记完全不一样**。用「方案又被打回来」当输入是自欺欺人 ——
         // 母鸡复述一遍就看着像提起了旧事,其实只是在重复用户自己的话。
@@ -93,7 +96,7 @@ final class RecallChatE2ETests: XCTestCase {
 
             ── 怎么读这份报告
             捞到了、回复里也自然提到了那件事 → 整条链通了
-            捞到了、回复里只字未提         → AI 行使了第二次否决权,觉得硬扯不合适
+            捞到了、回复里只字未提         → 生成行使了最后否决权,觉得硬扯不合适
             没捞到                        → 看上面那行空的原因
             """
 

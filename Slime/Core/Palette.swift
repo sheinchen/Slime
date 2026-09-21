@@ -52,6 +52,10 @@ enum Sky {
     static let islandShadow = UIColor(red: 120 / 255, green: 146 / 255, blue: 60 / 255, alpha: 0.40)
     /// 鸟巢上的提示圈。
     static let ring = UIColor(red: 242 / 255, green: 114 / 255, blue: 62 / 255, alpha: 0.55)
+
+    /// 母鸡关心你的那个气泡：比天光再白一点点，靠影子浮起来。
+    static let bubble = UIColor(hex: 0xFFFEFA)
+    static let bubbleShadow = UIColor(hex: 0x8A7A5A)
 }
 
 extension UIColor {

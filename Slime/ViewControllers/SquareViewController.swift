@@ -2,15 +2,11 @@
 //  SquareViewController.swift
 //  Slime
 //
-//  史莱姆广场:用现代 UICollectionView 把存下来的帖子渲染成一格格史莱姆占位方块。
-//  两个核心概念:Compositional Layout(排版)+ Diffable Data Source(数据驱动)。
+//  广场页:月份标题 + 周条(可下拉成月历)+ 选中那天的日记卡片堆 + 鸟巢。
 //
 
 import UIKit
 import SnapKit
-
-// Diffable 需要"分区"的类型。我们只有一个区,用枚举表示。
-
 
 final class SquareViewController: UIViewController {
 
@@ -26,12 +22,6 @@ final class SquareViewController: UIViewController {
         fatalError("init(coder:) has not been implemented")
     }
     
-    private let detailView = DiaryDetailView()
-
-    nonisolated private enum Section {
-        case main
-    }
-
     private let sky = SkyView()
     private let weekStrip = WeekStripView()
     private let monthLabel = UILabel()
@@ -44,15 +34,12 @@ final class SquareViewController: UIViewController {
     /// 存着月历的高度约束，展开收起就是改它
     private var monthGridHeight: Constraint?
     private var isMonthExpanded = false
-    private let card = UIView()
-    private let cardShadow = UIView()
-    private let emptyLabel = UILabel()
-    private var collectionView: UICollectionView!
+    /// 卡片、空状态、页码点三样的容器。展开月历时整块一起淡出
+    private let cardArea = UIView()
+    private let emptyCard = UIView()
+    private let pageControl = UIPageControl()
+    private let cardStack = DiaryCardStackView()
     private let nestStage = NestStageView()
-
-    // Diffable Data Source:泛型是 <分区类型, item 类型>。
-    // 它取代了老的 dataSource 代理(numberOfItems / cellForItem),改成"给它数据快照,它自己算差异刷新"。
-    private var dataSource: UICollectionViewDiffableDataSource<Section, SlimeItem>!
 
     // MARK: - 生命周期
 
@@ -100,14 +87,13 @@ final class SquareViewController: UIViewController {
 
         weekStrip.onSelect = { [weak self] day in
             guard let self else { return }
-            self.showList()
             self.viewModel.select(day)
-            self.refresh()
+            self.refresh(showFirstCard: true)
         }
 
         // 翻周只换标题，不碰选中、不碰列表、不碰鸟巢 —— 翻周就只是「看看那周」
-        weekStrip.onWeekChange = { [weak self] index in
-            self?.updateTitle(week: index)
+        weekStrip.onWeekChange = { [weak self] _ in
+            self?.updateTitle()
         }
         nestStage.snp.makeConstraints { make in
         make.leading.trailing.equalToSuperview()
@@ -122,9 +108,7 @@ final class SquareViewController: UIViewController {
             sky.bottomAnchor.constraint(equalTo: view.bottomAnchor),
         ])
         
-        setupCollectionView()
-        setupCard()
-        setupDataSource()
+        setupCards()
         setupMonthGrid()
      
         nestStage.canLay = { [weak self] in
@@ -142,7 +126,11 @@ final class SquareViewController: UIViewController {
                     let summary = try await self.viewModel.finishTodaySummary()
                     self.nestStage.revealEgg(to: summary.emotion)
                     self.nestStage.setCaption(summary.text)
+                    // 只重画周条和月历上的蛋，不走 refresh —— 鸟巢正在演揭晓，
+                    // refresh 会重新 configure 鸟巢把它打断。
+                    // 月历也要刷：展开着月历时母鸡照样按得到
                     self.weekStrip.configure(weeks: self.viewModel.weeks, jumpTo: nil)
+                    self.monthGrid.configure(months: self.viewModel.months, jumpTo: nil)
                 } catch {
                     self.refresh()
                     self.nestStage.setCaption("哎呀没有孵出来！再试一次！")
@@ -156,18 +144,25 @@ final class SquareViewController: UIViewController {
     ///   「重新进这一页」传本周；「从月历选了某天」传那天所在的周；
     ///   其余调用方（点周条上某一天、数据在别处变了）一律用默认值 ——
     ///   否则你翻到上周、点上周三，周条会把自己弹回本周，那天就点不开了。
-    private func refresh(jumpTo index: Int? = nil) {
-        let week = index ?? weekStrip.currentIndex
+    /// - Parameter showFirstCard: 卡片堆要不要从第一篇重新叠。**换了一天**才传 true
+    ///   （进页、点周条、点月历）。数据在别处变了、删了一篇都不传 ——
+    ///   切出 App 再回来会触发 `dataDidChange`，正看着第三篇被换回第一篇会很烦。
+    ///   跟 `jumpTo` 同一个道理：是调用方知道的事，不是 VC 该记住的状态。
+    private func refresh(jumpTo index: Int? = nil, showFirstCard: Bool = false) {
         weekStrip.configure(weeks: viewModel.weeks, jumpTo: index)
+        // 月历停在哪个月不动。它展开着时数据也可能变（切出 App 再回来会补蛋）
+        monthGrid.configure(months: viewModel.months, jumpTo: nil)
 
-        updateTitle(week: week)
-        applySnapshot()
-        emptyLabel.isHidden = !viewModel.entries.isEmpty
+        updateTitle()
+        // 页码数要先于卡片堆设好 —— 堆装完会马上回报「最上面是第几篇」
+        pageControl.numberOfPages = viewModel.entries.count
+        cardStack.configure(viewModel.entries, startOver: showFirstCard)
+        emptyCard.isHidden = !viewModel.entries.isEmpty
         nestStage.configure(viewModel.selectedDay)
     }
- 
+
     /// 月历盖在「周条 + 卡片」的位置上。
-    /// **必须在 setupCard() 之后 addSubview** —— UIKit 里后加的 subview 在上层，
+    /// **必须在 setupCards() 之后 addSubview** —— UIKit 里后加的 subview 在上层，
     /// 早于卡片加进去就会被卡片盖住。
     private func setupMonthGrid() {
         monthGrid.isHidden = true
@@ -182,9 +177,15 @@ final class SquareViewController: UIViewController {
             guard let self else { return }
             self.viewModel.select(day)
             self.setMonthExpanded(false)
-            self.showList()
-            // 收起之后周条要停在刚选的那天所在的周，否则高亮圈在屏幕外
-            self.refresh(jumpTo: self.viewModel.weekIndex(containing: day.date))
+            // 收起之后周条要停在刚选的那天所在的周，否则高亮圈在屏幕外。
+            // 这里不走 alignHiddenSide 的「标题不跳」规则：点的若是上月末那几格，
+            // 周条就该去那天，标题跟着变才是对的
+            self.refresh(jumpTo: self.viewModel.weekIndex(containing: day.date), showFirstCard: true)
+        }
+
+        // 翻月同翻周：只换标题
+        monthGrid.onMonthChange = { [weak self] _ in
+            self?.updateTitle()
         }
 
         // 两处都要能拖：收起时在周条上往下拉，展开时在月历上往上推。
@@ -200,6 +201,8 @@ final class SquareViewController: UIViewController {
 
         let gridPan = makeMonthPan()
         monthGrid.addGestureRecognizer(gridPan)
+        // 月历现在也能横滑翻月了，跟周条同一个问题、同一个解法
+        monthGrid.horizontalPan.require(toFail: gridPan)
     }
 
     private func makeMonthPan() -> UIPanGestureRecognizer {
@@ -215,9 +218,9 @@ final class SquareViewController: UIViewController {
     /// 抽出来是因为**拖动和松手回弹用的是同一套**：拖动时每帧调一次，
     /// 回弹时在动画块里调一次目标值。两边各写一份迟早会漂。
     private func applyMonthProgress(_ t: CGFloat) {
-        monthGridHeight?.update(offset: monthGrid.contentHeight * t)
+        monthGridHeight?.update(offset: MonthGridView.contentHeight * t)
         weekStrip.alpha = 1 - t
-        cardShadow.alpha = 1 - t
+        cardArea.alpha = 1 - t
         // 不写满 .pi：正好 180° 时两个旋转方向等距，Core Animation 会随机挑一边
         chevron.transform = CGAffineTransform(rotationAngle: .pi * 0.999 * t)
     }
@@ -225,21 +228,15 @@ final class SquareViewController: UIViewController {
     /// 手指拖到现在，进度是多少。
     /// 从当前状态起算：收起时从 0 往下加，展开时从 1 往回减。
     private func monthProgress(for gesture: UIPanGestureRecognizer) -> CGFloat {
-        let full = monthGrid.contentHeight
-        guard full > 0 else { return isMonthExpanded ? 1 : 0 }
         let base: CGFloat = isMonthExpanded ? 1 : 0
-        return min(max(base + gesture.translation(in: view).y / full, 0), 1)
+        return min(max(base + gesture.translation(in: view).y / MonthGridView.contentHeight, 0), 1)
     }
 
     @objc private func handleMonthPan(_ gesture: UIPanGestureRecognizer) {
         switch gesture.state {
         case .began:
-            // 拖之前先把这个月备好 —— contentHeight 是按行数算的，
-            // 没 configure 就没有高度，除不动
-            if !isMonthExpanded {
-                monthGrid.configure(weeks: viewModel.weeksInMonth(ofWeek: weekStrip.currentIndex))
-                monthGrid.isHidden = false
-            }
+            // 手指一动，藏着的那一边就开始往外冒了 —— 必须在第一帧之前对好位置
+            alignHiddenSide()
 
         case .changed:
             applyMonthProgress(monthProgress(for: gesture))
@@ -257,7 +254,25 @@ final class SquareViewController: UIViewController {
     }
 
     @objc private func titleTapped() {
+        alignHiddenSide()
         setMonthExpanded(!isMonthExpanded)
+    }
+
+    /// 展开 / 收起之前，把**藏着的那一边**挪到跟标题对得上的位置：
+    /// - 展开前（周条在显示）：月历翻到周条这一周所在的月
+    /// - 收起前（月历在显示）：周条挪到月历这个月里的某一周，挑哪周见 VM 的 `weekIndex(forMonth:current:)`
+    ///
+    /// 两边都是从高度 0 / alpha 0 慢慢出来的，所以得在出来之前就挪好 ——
+    /// 等动画完再挪，会看到它在眼皮底下跳一下。
+    private func alignHiddenSide() {
+        if isMonthExpanded {
+            weekStrip.jump(to: viewModel.weekIndex(forMonth: monthGrid.currentIndex,
+                                                   current: weekStrip.currentIndex))
+        } else {
+            // nil 只在最早那一周出现（它的周四落在 months 之前那个月），就近取第一页
+            monthGrid.jump(to: viewModel.monthIndex(ofWeek: weekStrip.currentIndex) ?? 0)
+            monthGrid.isHidden = false
+        }
     }
 
     /// 展开 / 收起月历。
@@ -269,12 +284,11 @@ final class SquareViewController: UIViewController {
     /// - Parameter animated: `viewWillAppear` 里重置时传 false，不然进页面会看到月历闪一下
     private func setMonthExpanded(_ expanded: Bool, animated: Bool = true) {
         isMonthExpanded = expanded
+        // 标题的来源换了一边（周条 ↔ 月历）。alignHiddenSide 对好位置之后两边是同一个月，
+        // 平时这句不会让标题变；只有最早那一周的边角情况会，见 alignHiddenSide
+        updateTitle()
 
         if expanded {
-            // 显示周条当前停的那一周所属的月份。
-            // 必须在量高度之前 configure —— contentHeight 是按行数算的，
-            // 5 周的月份和 6 周的月份不一样高
-            monthGrid.configure(weeks: viewModel.weeksInMonth(ofWeek: weekStrip.currentIndex))
             // 展开要先露出来再长高；收起则相反，等动画完了再藏
             monthGrid.isHidden = false
         }
@@ -299,13 +313,23 @@ final class SquareViewController: UIViewController {
         }
     }
 
-    /// 标题跟着**翻到哪一周**走，不跟选中日走 —— 翻到八月就写「八月」，
-    /// 哪怕选中的还是今天。
-    private func updateTitle(week index: Int) {
-        monthLabel.attributedText = Kai.attributed(viewModel.monthTitle(atWeek: index), size: 34,
+    /// 标题跟着**正在看的那一页**走，不跟选中日走 —— 翻到八月就写「八月」，
+    /// 哪怕选中的还是今天。收起时看周条停在哪周，展开时看月历翻到哪个月。
+    private func updateTitle() {
+        let month: String
+        let year: String?
+        if isMonthExpanded {
+            month = viewModel.monthTitle(atMonth: monthGrid.currentIndex)
+            year = viewModel.yearTitle(atMonth: monthGrid.currentIndex)
+        } else {
+            month = viewModel.monthTitle(atWeek: weekStrip.currentIndex)
+            year = viewModel.yearTitle(atWeek: weekStrip.currentIndex)
+        }
+
+        monthLabel.attributedText = AppFont.attributed(month, size: 34,
                                                    color: Sky.ink, kern: 34 * 0.03)
-        if let year = viewModel.yearTitle(atWeek: index) {
-            yearLabel.attributedText = Kai.attributed(year, size: 15, color: Sky.ink(0.34))
+        if let year {
+            yearLabel.attributedText = AppFont.attributed(year, size: 15, color: Sky.ink(0.34))
             yearLabel.isHidden = false
         } else {
             yearLabel.isHidden = true
@@ -324,136 +348,72 @@ final class SquareViewController: UIViewController {
         viewModel.resetToToday()
         setMonthExpanded(false, animated: false)
         viewModel.loadPosts()
-        refresh(jumpTo: viewModel.currentWeekIndex)
+        refresh(jumpTo: viewModel.currentWeekIndex, showFirstCard: true)
     }
 
-    // MARK: - 布局(Compositional Layout)
-    
-    private func setupCard() {
-        cardShadow.backgroundColor = .clear
-        cardShadow.layer.shadowColor = UIColor(hex: 0x6B5B45).cgColor
-        cardShadow.layer.shadowOpacity = 0.08
-        cardShadow.layer.shadowRadius = 22
-        cardShadow.layer.shadowOffset = CGSize(width: 0, height: 10)
-        view.addSubview(cardShadow)
+    // MARK: - 卡片堆
 
-        card.backgroundColor = UIColor.white
-        card.layer.cornerRadius = 26
-        card.layer.cornerCurve = .continuous
-        card.clipsToBounds = true
-        cardShadow.addSubview(card)
-
-        emptyLabel.attributedText = Kai.attributed("这天巢是空的", size: 16, color: Sky.ink(0.3))
-        emptyLabel.isHidden = true
-        card.addSubview(emptyLabel)
-        
-        detailView.isHidden = true
-        detailView.alpha = 0
-        card.addSubview(detailView)
-        detailView.snp.makeConstraints { make in
-            make.edges.equalToSuperview()
-        }
-        detailView.onBack = { [weak self] in
-            self?.showList()
-        }
-
-        cardShadow.snp.makeConstraints { make in
+    private func setupCards() {
+        view.addSubview(cardArea)
+        cardArea.snp.makeConstraints { make in
             make.top.equalTo(weekStrip.snp.bottom).offset(24)
+            // 和周条、浮动 tab 条同一个 22 缩进，竖着看是对齐的
             make.leading.trailing.equalToSuperview().inset(22)
-            // 底下先留出母鸡的位置,下一轮填
-            make.bottom.equalTo(nestStage.snp.top).offset(-14)
+            // 底下留出页码点那一条
+            make.bottom.equalTo(nestStage.snp.top).offset(-26)
         }
-        card.snp.makeConstraints { make in
+
+        // 空的那天放一张半透明的「虚卡」占住位置，版面不塌
+        emptyCard.backgroundColor = UIColor.white.withAlphaComponent(0.5)
+        emptyCard.layer.cornerRadius = DiaryCardView.cornerRadius
+        emptyCard.layer.cornerCurve = .continuous
+        emptyCard.isHidden = true
+        cardArea.addSubview(emptyCard)
+        emptyCard.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
+        let emptyLabel = UILabel()
+        emptyLabel.attributedText = AppFont.attributed("这天巢是空的", size: 16, color: Sky.ink(0.3))
+        emptyCard.addSubview(emptyLabel)
         emptyLabel.snp.makeConstraints { make in
             make.center.equalToSuperview()
         }
-    }
-    
-    private func setupCollectionView() {
-        collectionView = UICollectionView(frame: .zero, collectionViewLayout: makeLayout())
-        collectionView.backgroundColor = .clear
-        collectionView.delegate = self
-        card.addSubview(collectionView)
-        collectionView.snp.makeConstraints { make in
+
+        cardArea.addSubview(cardStack)
+        cardStack.snp.makeConstraints { make in
             make.edges.equalToSuperview()
         }
-    }
-
-    
-    /// iOS 14 起 Compositional Layout 内置了列表形态,分隔线、缩进、滑动操作全带好了,
-    /// 不用自己拼 item → group → section。
-    private func makeLayout() -> UICollectionViewLayout {
-        var config = UICollectionLayoutListConfiguration(appearance: .plain)
-        config.backgroundColor = .clear
-        config.showsSeparators = true
-        config.separatorConfiguration.color = UIColor(hex: 0xEAE4D6)
-        config.separatorConfiguration.topSeparatorVisibility = .hidden
-        // 分隔线两头缩进,不要顶到卡片边
-        config.separatorConfiguration.bottomSeparatorInsets =
-            NSDirectionalEdgeInsets(top: 0, leading: 26, bottom: 0, trailing: 26)
-        return UICollectionViewCompositionalLayout.list(using: config)
-    }
-
-    // MARK: - 数据(Diffable Data Source)
-
-    private func setupDataSource() {
-        // CellRegistration:现代注册方式,不用再写字符串 reuseIdentifier,类型安全
-        let registration = UICollectionView.CellRegistration<DiaryEntryCell, SlimeItem> { cell, _, item in
-            cell.configure(item)
+        cardStack.onTopChange = { [weak self] index in
+            self?.pageControl.currentPage = index
+        }
+        cardStack.onDelete = { [weak self] item in
+            self?.deleteItem(item)
         }
 
-        // dataSource 负责:给它一个 item,它返回配置好的 cell
-        dataSource = UICollectionViewDiffableDataSource<Section, SlimeItem>(
-            collectionView: collectionView
-        ) { collectionView, indexPath, item in
-            collectionView.dequeueConfiguredReusableCell(using: registration, for: indexPath, item: item)
+        // 页码点只是个指示，不接点击 —— 换下一篇就靠抽卡
+        pageControl.hidesForSinglePage = true
+        pageControl.isUserInteractionEnabled = false
+        pageControl.pageIndicatorTintColor = Sky.ink(0.14)
+        pageControl.currentPageIndicatorTintColor = Sky.ink(0.45)
+        cardArea.addSubview(pageControl)
+        pageControl.snp.makeConstraints { make in
+            make.centerX.equalToSuperview()
+            // 落在卡片堆和鸟巢之间那条缝里
+            make.centerY.equalTo(cardArea.snp.bottom).offset(13)
         }
     }
 
-    /// 快照(snapshot)= 当前该显示哪些数据。把最新的 items 塞进去,交给 dataSource,它自动算差异刷新界面。
-    private func applySnapshot() {
-        var snapshot = NSDiffableDataSourceSnapshot<Section, SlimeItem>()
-        snapshot.appendSections([.main])
-        snapshot.appendItems(viewModel.entries, toSection: .main)
-        dataSource.apply(snapshot, animatingDifferences: false)
-    }
-    
-    //MARK: - 列表<->原文
-    private func showDetail(_ item: SlimeItem) {
-        detailView.configure(item)
-        detailView.alpha = 0
-        detailView.isHidden = false
-        detailView.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)
-        
-        UIView.animate(withDuration: 0.28, delay: 0, options: .curveEaseOut) {
-            // 列表往外放大着淡出、原文从里面长出来 —— 视觉上是"往里走了一层"
-            self.collectionView.alpha = 0
-            self.collectionView.transform = CGAffineTransform(scaleX: 1.04, y: 1.04)
-            self.emptyLabel.alpha = 0
-            self.detailView.alpha = 1
-            self.detailView.transform = .identity
-        } completion: { _ in
-            self.collectionView.isHidden = true
-            self.collectionView.transform = .identity
+    /// 删除:VM 删数据,再整体 refresh —— 不只是卡片,周条上那天的圆点、
+    /// 鸟巢的状态也可能跟着变(删光了那天就没记录了)
+    ///
+    /// 刷两次:删完立刻刷一次(过去的天变成没表情的绿壳,今天变回母鸡),
+    /// 过去那天的蛋重孵回来再刷一次(绿壳就地揭晓成新蛋,动画由 NestStageView 自己认出来演)。
+    private func deleteItem(_ item: SlimeItem) {
+        viewModel.delete(item)
+        refresh()
+        Task {
+            if await viewModel.rehatchAfterDelete(item) { refresh() }
         }
-    }
-    
-    private func showList() {
-        collectionView.alpha = 0
-            collectionView.isHidden = false
-            collectionView.transform = CGAffineTransform(scaleX: 1.04, y: 1.04)
-
-            UIView.animate(withDuration: 0.28, delay: 0, options: .curveEaseOut) {
-                self.detailView.alpha = 0
-                self.detailView.transform = CGAffineTransform(scaleX: 0.96, y: 0.96)
-                self.collectionView.alpha = 1
-                self.collectionView.transform = .identity
-                self.emptyLabel.alpha = 1
-            } completion: { _ in
-                self.detailView.isHidden = true
-            }
     }
 }
 
@@ -469,44 +429,6 @@ extension SquareViewController: UIGestureRecognizerDelegate {
         let velocity = pan.velocity(in: view)
         guard abs(velocity.y) > abs(velocity.x) else { return false }
         return isMonthExpanded ? velocity.y < 0 : velocity.y > 0
-    }
-}
-
-// MARK: - UICollectionViewDelegate
-
-extension SquareViewController: UICollectionViewDelegate {
-
-    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        collectionView.deselectItem(at: indexPath, animated: false)
-        guard let item = dataSource.itemIdentifier(for: indexPath) else { return }
-        showDetail(item)
-    }
-    
-    // 长按某个格子时,返回一个上下文菜单(iOS 会自动做放大预览 + 弹菜单)
-    func collectionView(
-        _ collectionView: UICollectionView,
-        contextMenuConfigurationForItemAt indexPath: IndexPath,
-        point: CGPoint
-    ) -> UIContextMenuConfiguration? {
-        guard let item = dataSource.itemIdentifier(for: indexPath) else { return nil }
-
-        return UIContextMenuConfiguration(identifier: nil, previewProvider: nil) { [weak self] _ in
-            // 一个"删除"动作:红色破坏性样式 + 垃圾桶图标
-            let delete = UIAction(
-                title: "删除",
-                image: UIImage(systemName: "trash"),
-                attributes: .destructive
-            ) { _ in
-                self?.deleteItem(item)
-            }
-            return UIMenu(children: [delete])
-        }
-    }
-
-    // 执行删除:VM 删数据,再刷新快照让 diffable 播移除动画
-    private func deleteItem(_ item: SlimeItem) {
-        viewModel.delete(item)
-        applySnapshot()
     }
 }
 

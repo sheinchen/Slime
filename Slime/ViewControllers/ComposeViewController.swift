@@ -79,7 +79,7 @@ final class ComposeViewController: UIViewController {
     
     private let textView: UITextView  = {
         let tv = UITextView()
-        tv.font  = Kai.font(19)
+        tv.font  = AppFont.font(19)
         tv.textColor = Sky.ink
         tv.backgroundColor = .clear
         tv.textContainerInset = .zero
@@ -94,14 +94,14 @@ final class ComposeViewController: UIViewController {
     private let placeholderLabel: UILabel = {
         let label = UILabel()
         label.text = "此刻想说点什么…"
-        label.font = .systemFont(ofSize: 18)
+        label.font = AppFont.font(18)
         label.textColor = .tertiaryLabel
         return label
     }()
     
     private let generateButton: UIButton = {
         let b = UIButton(type: .system)
-        b.setAttributedTitle(Kai.attributed("收 好", size: 17, color: Sky.ink(0.75), kern: 2), for: .normal)
+        b.setAttributedTitle(AppFont.attributed("收 好", size: 17, color: Sky.ink(0.75), kern: 2), for: .normal)
         b.backgroundColor = UIColor.white.withAlphaComponent(0.75)
         b.layer.cornerRadius = 24
         b.layer.cornerCurve = .continuous
@@ -129,7 +129,7 @@ final class ComposeViewController: UIViewController {
     /// 揭晓后在史莱姆下面淡入的一行 AI 回复。平时隐藏。
     private let replyLabel: UILabel = {
         let label = UILabel()
-        label.font = .systemFont(ofSize: 16, weight: .medium)
+        label.font = AppFont.font(16)
         label.textColor = .secondaryLabel
         label.textAlignment = .center
         label.numberOfLines = 0
@@ -198,8 +198,8 @@ final class ComposeViewController: UIViewController {
         if let henView { view.addSubview(henView) }
         view.addSubview(replyLabel)
 
-        dateLabel.attributedText = Kai.attributed(todayTitle(), size: 15, color: Sky.ink(0.45))
-        placeholderLabel.attributedText = Kai.attributed("今天……", size: 19, color: Sky.ink(0.28))
+        dateLabel.attributedText = AppFont.attributed(todayTitle(), size: 15, color: Sky.ink(0.45))
+        placeholderLabel.attributedText = AppFont.attributed("今天……", size: 19, color: Sky.ink(0.28))
 
         backdrop.snp.makeConstraints { make in
             make.edges.equalToSuperview()
