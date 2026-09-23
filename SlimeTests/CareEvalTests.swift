@@ -26,16 +26,35 @@ final class CareEvalTests: XCTestCase {
         Int(ProcessInfo.processInfo.environment["EVAL_RUNS"] ?? "") ?? 3
     }
 
+    /// 只跑指定 id 的场景，逗号分隔（`TEST_RUNNER_EVAL_ONLY=37,38,39,40`）。空 = 全跑。
+    /// 改 prompt 时先拿一小撮快速对比，省得每次都烧掉全量 × 5 次调用。
+    /// ⚠️ 子集跑出来的 precision / recall **不能和全量基线比**，只能和同一子集的上一次比。
+    private var onlyIDs: Set<Int> {
+        let raw = ProcessInfo.processInfo.environment["EVAL_ONLY"] ?? ""
+        return Set(raw.split(separator: ",").compactMap { Int($0.trimmingCharacters(in: .whitespaces)) })
+    }
+
     /// 固定时刻。窗口日期都是相对它算的，测试不能依赖「今天」。
     private let now = Date(timeIntervalSince1970: 1_757_000_000)
 
     // MARK: - 一次场景的结果
 
+    /// 说出口的一句话 —— 连同判断文案要用到的两个附带信息。
+    ///
+    /// **光存 text 不够**:范围词那条检查要知道它引用了几天
+    /// (「那几天」只在引用了一天时才是错的),长度那条要知道安全级别
+    /// (concern / crisis 时 prompt 允许说长一点)。
+    nonisolated struct Said {
+        let text: String
+        let days: Int           // referencedDates 的天数
+        let normal: Bool        // safety == .normal
+    }
+
     private struct Outcome {
         let c: EvalCase
         var saidCount = 0        // 说了几次
         var failedCount = 0      // 调用失败几次
-        var samples: [String] = []   // 它说了什么，人工抽查用
+        var samples: [Said] = []     // 它说了什么，文案抽查用
 
         var runs: Int { saidCount + failedCount + notSaidCount }
         var notSaidCount = 0
@@ -60,9 +79,14 @@ final class CareEvalTests: XCTestCase {
         let runs = runsPerCase
         var outcomes: [Outcome] = []
 
-        dump("\n跑 \(CareEvalCases.all.count) 个场景 × \(runs) 次 = \(CareEvalCases.all.count * runs) 次调用\n")
+        let only = onlyIDs
+        let cases = only.isEmpty ? CareEvalCases.all : CareEvalCases.all.filter { only.contains($0.id) }
+        XCTAssertFalse(cases.isEmpty, "EVAL_ONLY 里的 id 一个都没匹配上：\(only.sorted())")
 
-        for c in CareEvalCases.all {
+        dump("\n跑 \(cases.count) 个场景 × \(runs) 次 = \(cases.count * runs) 次调用"
+             + (only.isEmpty ? "" : "（只跑 \(only.sorted().map(String.init).joined(separator: ","))）") + "\n")
+
+        for c in cases {
             var o = Outcome(c: c)
 
             for _ in 0..<runs {
@@ -71,7 +95,9 @@ final class CareEvalTests: XCTestCase {
                                                     recentlySaid: c.recentlySaid)
                     if d.shouldShow {
                         o.saidCount += 1
-                        o.samples.append(d.message)
+                        o.samples.append(Said(text: d.message,
+                                              days: d.referencedDates.count,
+                                              normal: d.safety == .normal))
                     } else {
                         o.notSaidCount += 1
                     }
@@ -88,7 +114,13 @@ final class CareEvalTests: XCTestCase {
         }
 
         report(outcomes, runs: runs)
+        let hardHits = copyAudit(outcomes)
         attachTranscript()
+
+        // **只有硬禁词才断言失败。** precision / recall 是分数、没有「通过」一说
+        // (见文件头),但禁词是条亮线:规格第 10 节写的就是「禁词 0 例」。
+        // 放在 attachTranscript 之后 —— 失败也要能捞到报告。
+        XCTAssertEqual(hardHits, 0, "文案里出现了 prompt 明令禁止的词,详见报告「文案抽查」一节")
     }
 
     // MARK: - 输出
@@ -169,11 +201,103 @@ final class CareEvalTests: XCTestCase {
             for o in wrong {
                 detail += "\n#\(o.c.id) \(o.c.name)（标注该\(o.c.expected ? "说" : "闭嘴")）"
                 detail += "\n   理由: \(o.c.rationale)"
-                for s in o.samples.prefix(2) { detail += "\n   它说: \(s)" }
+                // 抽查文案时 2 条不够看 —— 判错的场景里,**它说了什么**往往比「说没说」更要紧:
+                // 同一条用例可能一半是有分量的综合、一半是「注意休息」级别的空话,
+                // 只看两条会把这个差别藏起来。
+                for s in o.samples.prefix(10) { detail += "\n   它说: \(s.text)" }
                 detail += "\n"
             }
             dump(detail)
         }
+    }
+
+    // MARK: - 文案抽查
+    //
+    // 和 precision / recall 是两回事:那两个量的是**说不说**,这里量的是**说了什么**。
+    // 规格第 10 节列的「文案铁律:禁词 0 例」一直没实现,这里补上。
+    //
+    // 分两档,分界线和闸门那条一样 —— **算术的硬判,语义的只报不判**:
+    // · 硬禁词:prompt 里**逐字点名**禁止的,出现即失败,没有判断余地
+    // · 可疑项:要看上下文才能定的,列出来给人看
+    //
+    // 范围词是典型的第二类:「这几天」在真的连着好几天时完全正确,
+    // **只在它引用了一天时才是把事实说错**(09-23 外婆那次就是 —— 外婆只出现在一天,
+    // 模型反复说「外婆住院那几天」)。所以判据不是「有没有这个词」,而是「词 + 引用了几天」。
+
+    private enum Copy {
+        /// 暴露判断依据(铁律②)。**prompt 里是逐字点名禁止的**,所以敢硬判。
+        static let leaks = ["连续", "检测", "记录显示", "数据显示", "从日记看", "我注意到"]
+
+        /// 很快过期的时间词。同样是 prompt 里逐字点名的。
+        static let expiring = ["今天", "今晚", "刚刚"]
+
+        /// 范围词:把一天说成好几天。**只在只引用了一天时才可疑**,所以只报不判。
+        static let spans = ["这几天", "那几天", "这阵子", "那阵子", "这段时间", "连着", "一连"]
+
+        /// safety normal 时「**尽量**不超过 32 个汉字」—— prompt 写的是「尽量」,所以只报。
+        /// **只数汉字**:prompt 说的是「汉字」,把标点和「咕」后面那些符号算进去会虚报。
+        static let maxChars = 32
+
+        static func hanCount(_ s: String) -> Int {
+            s.unicodeScalars.filter { (0x4E00...0x9FFF).contains($0.value) }.count
+        }
+    }
+
+    private struct Hit { let id: Int; let tag: String; let text: String }
+
+    /// - Returns: 硬禁词命中数。调用方据此断言。
+    private func copyAudit(_ outcomes: [Outcome]) -> Int {
+        var hard: [Hit] = [], spans: [Hit] = [], long: [Hit] = []
+        var total = 0
+
+        for o in outcomes {
+            for said in o.samples {
+                total += 1
+                for w in Copy.leaks + Copy.expiring where said.text.contains(w) {
+                    hard.append(Hit(id: o.c.id, tag: w, text: said.text))
+                }
+                // 范围词:只在**引用不超过 2 天**时才报。
+                //
+                // 这个阈值是调出来的,两头都撞过:
+                // · 第一版卡 days == 1 → 全量 0 例,**假阴性**。referencedDates 数的是
+                //   「这条关怀基于哪几天」,不是「它说的那件事跨几天」;模型会引用 2 天
+                //   (外婆 + 加班)却仍然把单日的外婆说成「那几天」。
+                // · 第二版不预筛、全报 → 110 句里 19 例,其中 11 例是 `引用4~5天`,
+                //   那些场景真的连着好几天,「这几天」完全正确。**噪声淹掉信号**。
+                // · 现在卡 ≤ 2 天:「几天」口语上至少是三天,引用一两天却说「几天」才可疑。
+                //
+                // 仍然只报不判 —— 判断是语义的。days == 1 标 ⚠️,那种基本是错的。
+                if said.days <= 2 {
+                    for w in Copy.spans where said.text.contains(w) {
+                        let mark = said.days == 1 ? "⚠️ " : ""
+                        spans.append(Hit(id: o.c.id, tag: "\(mark)\(w)·引用\(said.days)天", text: said.text))
+                    }
+                }
+                let han = Copy.hanCount(said.text)
+                if said.normal, han > Copy.maxChars {
+                    long.append(Hit(id: o.c.id, tag: "\(han) 汉字", text: said.text))
+                }
+            }
+        }
+
+        // ⚠️ 的排前面,列表被截断时先保住最可能是错的那些
+        spans.sort { $0.tag.hasPrefix("⚠️") && !$1.tag.hasPrefix("⚠️") }
+
+        func block(_ title: String, _ hits: [Hit]) -> String {
+            guard !hits.isEmpty else { return "\n\(title): 0 例 ✅" }
+            var out = "\n\(title): \(hits.count) 例"
+            for h in hits.prefix(12) { out += "\n  #\(h.id) 「\(h.tag)」 \(h.text)" }
+            if hits.count > 12 { out += "\n  …另有 \(hits.count - 12) 例" }
+            return out
+        }
+
+        dump("\n────── 文案抽查（共 \(total) 句）──────"
+             + block("硬禁词·暴露判断依据 / 会过期的时间词（0 例才算过）", hard)
+             + block("可疑·范围词（只看引用 ≤2 天的；⚠️ = 只引用一天，基本是说错了）", spans)
+             + block("可疑·超过 \(Copy.maxChars) 字（prompt 写的是「尽量」）", long)
+             + "\n")
+
+        return hard.count
     }
 
     private func pad(_ s: String, _ n: Int) -> String {

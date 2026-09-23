@@ -1,0 +1,1999 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/i107q5of",
+    "id": "i107q5of",
+    "slide": 5,
+    "layoutId": "/ppt/slideLayouts/slideLayout12.xml",
+    "layoutName": "TITLE_AND_BODY",
+    "layoutType": "tx",
+    "masterLayoutId": "/ppt/slideMasters/slideMaster1.xml",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1365.17,
+      "height": 1023.83
+    }
+  },
+  "theme": {
+    "colorSchemeName": "Office",
+    "colors": {
+      "accent1": "#4F81BD",
+      "accent2": "#C0504D",
+      "accent3": "#9BBB59",
+      "accent4": "#8064A2",
+      "accent5": "#4BACC6",
+      "accent6": "#F79646",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#1F497D",
+      "lt2": "#EEECE1",
+      "hlink": "#0000FF",
+      "folHlink": "#800080"
+    },
+    "fontScheme": {
+      "name": "Office",
+      "majorFont": {
+        "latinTypeface": "Arial"
+      },
+      "minorFont": {
+        "latinTypeface": "Arial"
+      }
+    },
+    "typefaces": [
+      "Arial"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "/ppt/slideLayouts/slideLayout12.xml",
+      "name": "TITLE_AND_BODY",
+      "type": "tx",
+      "parentLayoutId": "/ppt/slideMasters/slideMaster1.xml",
+      "elements": [
+        {
+          "order": 1,
+          "kind": "shape",
+          "scope": "layout",
+          "aid": "template/layout//ppt/slideLayouts/slideLayout12.xml/85",
+          "id": "85",
+          "name": "Google Shape;85;g3fb9ba7439b_0_47",
+          "bbox": [
+            659.83,
+            921.45,
+            318.55,
+            34.11
+          ],
+          "geometry": "rect",
+          "text": "‹#›",
+          "textPreview": "‹#›",
+          "resolvedTextStyle": {
+            "anchor": 2,
+            "verticalAlignment": "middle",
+            "wrap": "square",
+            "autoFit": "resizeShapeToFitText",
+            "insets": {
+              "top": 5.69,
+              "right": 5.69,
+              "bottom": 5.69,
+              "left": 5.69
+            },
+            "useParagraphSpacing": true
+          },
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "‹#›",
+              "resolvedTextStyle": {
+                "alignment": "right"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "‹#›",
+                  "alignment": "right"
+                }
+              ]
+            }
+          ],
+          "lineWidth": 0
+        }
+      ]
+    },
+    {
+      "scope": "master",
+      "id": "/ppt/slideMasters/slideMaster1.xml",
+      "type": "master",
+      "backgroundColor": "lt1",
+      "elements": [
+        {
+          "order": 1,
+          "kind": "shape",
+          "scope": "master",
+          "aid": "template/master//ppt/slideMasters/slideMaster1.xml/10",
+          "id": "10",
+          "name": "Google Shape;10;p4",
+          "bbox": [
+            34.13,
+            27.34,
+            614.34,
+            113.77
+          ],
+          "geometry": "rect",
+          "resolvedTextStyle": {
+            "anchor": 2,
+            "verticalAlignment": "middle",
+            "wrap": "square",
+            "autoFit": "shrinkText",
+            "insets": {
+              "top": 4.8,
+              "right": 9.6,
+              "bottom": 4.8,
+              "left": 9.6
+            },
+            "useParagraphSpacing": true
+          },
+          "lineWidth": 0
+        },
+        {
+          "order": 2,
+          "kind": "shape",
+          "scope": "master",
+          "aid": "template/master//ppt/slideMasters/slideMaster1.xml/11",
+          "id": "11",
+          "name": "Google Shape;11;p4",
+          "bbox": [
+            34.13,
+            159.27,
+            614.34,
+            450.48
+          ],
+          "geometry": "rect",
+          "resolvedTextStyle": {
+            "anchor": 1,
+            "verticalAlignment": "top",
+            "wrap": "square",
+            "autoFit": "shrinkText",
+            "insets": {
+              "top": 4.8,
+              "right": 9.6,
+              "bottom": 4.8,
+              "left": 9.6
+            },
+            "useParagraphSpacing": true
+          },
+          "lineWidth": 0
+        },
+        {
+          "order": 3,
+          "kind": "shape",
+          "scope": "master",
+          "aid": "template/master//ppt/slideMasters/slideMaster1.xml/12",
+          "id": "12",
+          "name": "Google Shape;12;p4",
+          "bbox": [
+            34.13,
+            632.66,
+            159.27,
+            36.34
+          ],
+          "geometry": "rect",
+          "resolvedTextStyle": {
+            "anchor": 2,
+            "verticalAlignment": "middle",
+            "wrap": "square",
+            "autoFit": "none",
+            "insets": {
+              "top": 4.8,
+              "right": 9.6,
+              "bottom": 4.8,
+              "left": 9.6
+            },
+            "useParagraphSpacing": true
+          },
+          "lineWidth": 0
+        },
+        {
+          "order": 4,
+          "kind": "shape",
+          "scope": "master",
+          "aid": "template/master//ppt/slideMasters/slideMaster1.xml/13",
+          "id": "13",
+          "name": "Google Shape;13;p4",
+          "bbox": [
+            233.22,
+            632.66,
+            216.16,
+            36.34
+          ],
+          "geometry": "rect",
+          "resolvedTextStyle": {
+            "anchor": 2,
+            "verticalAlignment": "middle",
+            "wrap": "square",
+            "autoFit": "none",
+            "insets": {
+              "top": 4.8,
+              "right": 9.6,
+              "bottom": 4.8,
+              "left": 9.6
+            },
+            "useParagraphSpacing": true
+          },
+          "lineWidth": 0
+        },
+        {
+          "order": 5,
+          "kind": "shape",
+          "scope": "master",
+          "aid": "template/master//ppt/slideMasters/slideMaster1.xml/14",
+          "id": "14",
+          "name": "Google Shape;14;p4",
+          "bbox": [
+            489.2,
+            632.66,
+            159.27,
+            36.34
+          ],
+          "geometry": "rect",
+          "text": "‹#›",
+          "textPreview": "‹#›",
+          "resolvedTextStyle": {
+            "anchor": 2,
+            "verticalAlignment": "middle",
+            "wrap": "square",
+            "autoFit": "none",
+            "insets": {
+              "top": 4.8,
+              "right": 9.6,
+              "bottom": 4.8,
+              "left": 9.6
+            },
+            "useParagraphSpacing": true
+          },
+          "paragraphs": [
+            {
+              "index": 1,
+              "text": "‹#›",
+              "resolvedTextStyle": {
+                "alignment": "right"
+              },
+              "runs": [
+                {
+                  "index": 1,
+                  "text": "‹#›",
+                  "alignment": "right"
+                }
+              ]
+            }
+          ],
+          "lineWidth": 0
+        }
+      ]
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/cfe9sjat",
+      "id": "151",
+      "name": "Google Shape;151;g3fb9ba7439b_0_9",
+      "bbox": [
+        73.38,
+        61.82,
+        1216.28,
+        64.82
+      ],
+      "geometry": "rect",
+      "text": "User Needs and Requirements",
+      "textPreview": "User Needs and Requirements",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "User Needs and Requirements"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "User Needs and Requirements",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "User Needs and Requirements",
+              "fontSize": 44,
+              "typeface": "Arial",
+              "color": "#50331D",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/be5szet8",
+      "id": "152",
+      "name": "Google Shape;152;g3fb9ba7439b_0_9",
+      "bbox": [
+        83.85,
+        233.34,
+        224.38,
+        37.35
+      ],
+      "geometry": "rect",
+      "text": "RESEARCH INSIGHT",
+      "textPreview": "RESEARCH INSIGHT",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "RESEARCH INSIGHT"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "RESEARCH INSIGHT",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "RESEARCH INSIGHT",
+              "fontSize": 21.33,
+              "color": "#DF7D44",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/adwrq9cn",
+      "id": "153",
+      "name": "Google Shape;153;g3fb9ba7439b_0_9",
+      "bbox": [
+        323.35,
+        193.35,
+        961.45,
+        127.84
+      ],
+      "geometry": "rect",
+      "text": "When the boarding queue is long, passengers may find it difficult to judge when it is best to join. Without enough information to make that decision, they may join the queue too early, spending time on unnecessary queueing that could otherwise be used to rest or use nearby facilities.",
+      "textPreview": "When the boarding queue is long, passengers may find it difficult to judge when it is best to join. Without enough information to make th...",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "When the boarding queue is long, passengers may find it difficult to judge when it is best"
+          },
+          {
+            "index": 2,
+            "text": "to join. Without enough information to make that decision, they may join the queue too"
+          },
+          {
+            "index": 3,
+            "text": "early, spending time on unnecessary queueing that could otherwise be used to rest or"
+          },
+          {
+            "index": 4,
+            "text": "use nearby facilities."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "When the boarding queue is long, passengers may find it difficult to judge when it is best to join. Without enough information to make that decision, they may join the queue too early, spending time on unnecessary queueing that could otherwise be used to rest or use nearby facilities.",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "When the boarding queue is long, passengers may find it difficult to judge when it is best to join. Without enough information to make that decision, they may join the queue too early, spending time on unnecessary queueing that could otherwise be used to rest or use nearby facilities.",
+              "fontSize": 24,
+              "typeface": "Arial",
+              "color": "#50331D",
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/pc3ax4b2",
+      "id": "154",
+      "name": "Google Shape;154;g3fb9ba7439b_0_9",
+      "bbox": [
+        68.26,
+        338.46,
+        1228.66,
+        0
+      ],
+      "geometry": "straightConnector1",
+      "lineColor": "#C78712",
+      "lineWidth": 2.37
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/obu9ozuh",
+      "id": "155",
+      "name": "Google Shape;155;g3fb9ba7439b_0_9",
+      "bbox": [
+        103.24,
+        374.15,
+        469.7,
+        45.42
+      ],
+      "geometry": "rect",
+      "text": "Passenger needs",
+      "textPreview": "Passenger needs",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Passenger needs"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Passenger needs",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Passenger needs",
+              "fontSize": 28,
+              "typeface": "Arial",
+              "color": "#DF7D44",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nalsvutw",
+      "id": "156",
+      "name": "Google Shape;156;g3fb9ba7439b_0_9",
+      "bbox": [
+        732.5,
+        374.15,
+        501.7,
+        45.42
+      ],
+      "geometry": "rect",
+      "text": "Design requirements",
+      "textPreview": "Design requirements",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Design requirements"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Design requirements",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Design requirements",
+              "fontSize": 28,
+              "color": "#DF7D44",
+              "bold": true
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/29crmpcr",
+      "id": "157",
+      "name": "Google Shape;157;g3fb9ba7439b_0_9",
+      "bbox": [
+        68.26,
+        440.14,
+        1228.66,
+        125.13
+      ],
+      "geometry": "rect",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": ""
+          }
+        ]
+      },
+      "fillColor": "#FCE8D3",
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/t87at8bm",
+      "id": "158",
+      "name": "Google Shape;158;g3fb9ba7439b_0_9",
+      "bbox": [
+        103.24,
+        456.41,
+        40.94,
+        32.5
+      ],
+      "geometry": "rect",
+      "text": "01",
+      "textPreview": "01",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "01"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "01",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "01",
+              "fontSize": 17.33,
+              "typeface": "Arial",
+              "color": "#ED5E32",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/87yt03a1",
+      "id": "159",
+      "name": "Google Shape;159;g3fb9ba7439b_0_9",
+      "bbox": [
+        162.97,
+        450.37,
+        544.91,
+        40.57
+      ],
+      "geometry": "rect",
+      "text": "Know when it is appropriate to join the queue",
+      "textPreview": "Know when it is appropriate to join the queue",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Know when it is appropriate to join the queue"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Know when it is appropriate to join the queue",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Know when it is appropriate to join the queue",
+              "fontSize": 24,
+              "typeface": "Arial",
+              "color": "#50331D",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/snqlcbm9",
+      "id": "160",
+      "name": "Google Shape;160;g3fb9ba7439b_0_9",
+      "bbox": [
+        162.97,
+        503.34,
+        448.38,
+        53.51
+      ],
+      "geometry": "rect",
+      "text": "Passengers need to identify a suitable time to join so they can avoid unnecessary queueing.",
+      "textPreview": "Passengers need to identify a suitable time to join so they can avoid unnecessary queueing.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Passengers need to identify a suitable time to join so"
+          },
+          {
+            "index": 2,
+            "text": "they can avoid unnecessary queueing."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Passengers need to identify a suitable time to join so they can avoid unnecessary queueing.",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Passengers need to identify a suitable time to join so they can avoid unnecessary queueing.",
+              "fontSize": 17.33,
+              "typeface": "Arial",
+              "color": "#5B7080",
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/dozmlwnu",
+      "id": "161",
+      "name": "Google Shape;161;g3fb9ba7439b_0_9",
+      "bbox": [
+        732.5,
+        450.37,
+        491.06,
+        40.57
+      ],
+      "geometry": "rect",
+      "text": "Help passengers decide when to join",
+      "textPreview": "Help passengers decide when to join",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Help passengers decide when to join"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Help passengers decide when to join",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Help passengers decide when to join",
+              "fontSize": 24,
+              "typeface": "Arial",
+              "color": "#50331D",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/q1o3a143",
+      "id": "162",
+      "name": "Google Shape;162;g3fb9ba7439b_0_9",
+      "bbox": [
+        732.5,
+        503.34,
+        491.06,
+        53.51
+      ],
+      "geometry": "rect",
+      "text": "The concept should provide enough information to support better timing decisions.",
+      "textPreview": "The concept should provide enough information to support better timing decisions.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The concept should provide enough information to support"
+          },
+          {
+            "index": 2,
+            "text": "better timing decisions."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The concept should provide enough information to support better timing decisions.",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The concept should provide enough information to support better timing decisions.",
+              "fontSize": 17.33,
+              "typeface": "Arial",
+              "color": "#5B7080",
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/r2hkj65o",
+      "id": "163",
+      "name": "Google Shape;163;g3fb9ba7439b_0_9",
+      "bbox": [
+        68.26,
+        568.12,
+        1228.66,
+        0
+      ],
+      "geometry": "straightConnector1",
+      "lineColor": "#D7E1E3",
+      "lineWidth": 1.18
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/4z6l8rmd",
+      "id": "164",
+      "name": "Google Shape;164;g3fb9ba7439b_0_9",
+      "bbox": [
+        103.24,
+        585.81,
+        40.94,
+        32.5
+      ],
+      "geometry": "rect",
+      "text": "02",
+      "textPreview": "02",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "02"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "02",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "02",
+              "fontSize": 17.33,
+              "typeface": "Arial",
+              "color": "#ED5E32",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/50f2hwny",
+      "id": "165",
+      "name": "Google Shape;165;g3fb9ba7439b_0_9",
+      "bbox": [
+        162.97,
+        579.77,
+        519.59,
+        40.57
+      ],
+      "geometry": "rect",
+      "text": "Understand the current queue situation",
+      "textPreview": "Understand the current queue situation",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Understand the current queue situation"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Understand the current queue situation",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Understand the current queue situation",
+              "fontSize": 24,
+              "typeface": "Arial",
+              "color": "#142B40",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ixo36h47",
+      "id": "166",
+      "name": "Google Shape;166;g3fb9ba7439b_0_9",
+      "bbox": [
+        162.97,
+        632.74,
+        448.38,
+        53.51
+      ],
+      "geometry": "rect",
+      "text": "Passengers need to know how crowded the queue is and how boarding is progressing.",
+      "textPreview": "Passengers need to know how crowded the queue is and how boarding is progressing.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Passengers need to know how crowded the queue is"
+          },
+          {
+            "index": 2,
+            "text": "and how boarding is progressing."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Passengers need to know how crowded the queue is and how boarding is progressing.",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Passengers need to know how crowded the queue is and how boarding is progressing.",
+              "fontSize": 17.33,
+              "typeface": "Arial",
+              "color": "#5B7080",
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 17,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/3yxkfm5s",
+      "id": "167",
+      "name": "Google Shape;167;g3fb9ba7439b_0_9",
+      "bbox": [
+        732.5,
+        579.77,
+        574.11,
+        40.57
+      ],
+      "geometry": "rect",
+      "text": "Provide clear, up-to-date queue information",
+      "textPreview": "Provide clear, up-to-date queue information",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Provide clear, up-to-date queue information"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Provide clear, up-to-date queue information",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Provide clear, up-to-date queue information",
+              "fontSize": 24,
+              "typeface": "Arial",
+              "color": "#50331D",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 18,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/gv6l4rm1",
+      "id": "168",
+      "name": "Google Shape;168;g3fb9ba7439b_0_9",
+      "bbox": [
+        732.5,
+        632.74,
+        491.06,
+        53.51
+      ],
+      "geometry": "rect",
+      "text": "The concept should make the current queue situation easy to understand.",
+      "textPreview": "The concept should make the current queue situation easy to understand.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The concept should make the current queue situation easy to"
+          },
+          {
+            "index": 2,
+            "text": "understand."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The concept should make the current queue situation easy to understand.",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The concept should make the current queue situation easy to understand.",
+              "fontSize": 17.33,
+              "typeface": "Arial",
+              "color": "#5B7080",
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 19,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/hwf2dcnm",
+      "id": "169",
+      "name": "Google Shape;169;g3fb9ba7439b_0_9",
+      "bbox": [
+        68.26,
+        697.52,
+        1228.66,
+        0
+      ],
+      "geometry": "straightConnector1",
+      "lineColor": "#D7E1E3",
+      "lineWidth": 1.18
+    },
+    {
+      "order": 20,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/jqd4n2po",
+      "id": "170",
+      "name": "Google Shape;170;g3fb9ba7439b_0_9",
+      "bbox": [
+        68.26,
+        698.94,
+        1228.66,
+        125.13
+      ],
+      "geometry": "rect",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": ""
+          }
+        ]
+      },
+      "fillColor": "#FCE8D3",
+      "lineWidth": 0
+    },
+    {
+      "order": 21,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/yp43uh83",
+      "id": "171",
+      "name": "Google Shape;171;g3fb9ba7439b_0_9",
+      "bbox": [
+        103.24,
+        715.21,
+        40.94,
+        32.5
+      ],
+      "geometry": "rect",
+      "text": "03",
+      "textPreview": "03",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "03",
+              "fontSize": 17.33,
+              "typeface": "Arial",
+              "color": "#ED5E32",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 22,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/lsvmpc7e",
+      "id": "172",
+      "name": "Google Shape;172;g3fb9ba7439b_0_9",
+      "bbox": [
+        162.97,
+        709.17,
+        519.59,
+        40.57
+      ],
+      "geometry": "rect",
+      "text": "Know whether they can step away briefly",
+      "textPreview": "Know whether they can step away briefly",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Know whether they can step away briefly"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Know whether they can step away briefly",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Know whether they can step away briefly",
+              "fontSize": 24,
+              "typeface": "Arial",
+              "color": "#50331D",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 23,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/krmlw7qt",
+      "id": "173",
+      "name": "Google Shape;173;g3fb9ba7439b_0_9",
+      "bbox": [
+        162.97,
+        762.14,
+        469.7,
+        53.51
+      ],
+      "geometry": "rect",
+      "text": "Passengers want to know whether they have enough time to remain seated, use nearby facilities, or visit a shop.",
+      "textPreview": "Passengers want to know whether they have enough time to remain seated, use nearby facilities, or visit a shop.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Passengers want to know whether they have enough time"
+          },
+          {
+            "index": 2,
+            "text": "to remain seated, use nearby facilities, or visit a shop."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Passengers want to know whether they have enough time to remain seated, use nearby facilities, or visit a shop.",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Passengers want to know whether they have enough time to remain seated, use nearby facilities, or visit a shop.",
+              "fontSize": 17.33,
+              "typeface": "Arial",
+              "color": "#5B7080",
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 24,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/7ud4rmpk",
+      "id": "174",
+      "name": "Google Shape;174;g3fb9ba7439b_0_9",
+      "bbox": [
+        732.5,
+        709.17,
+        491.06,
+        40.57
+      ],
+      "geometry": "rect",
+      "text": "Support confident waiting",
+      "textPreview": "Support confident waiting",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Support confident waiting"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Support confident waiting",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Support confident waiting",
+              "fontSize": 24,
+              "typeface": "Arial",
+              "color": "#50331D",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 25,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/6t43yh8z",
+      "id": "175",
+      "name": "Google Shape;175;g3fb9ba7439b_0_9",
+      "bbox": [
+        732.5,
+        762.14,
+        491.06,
+        53.51
+      ],
+      "geometry": "rect",
+      "text": "The concept should give passengers enough confidence to decide whether they can briefly leave the gate area.",
+      "textPreview": "The concept should give passengers enough confidence to decide whether they can briefly leave the gate area.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The concept should give passengers enough confidence to"
+          },
+          {
+            "index": 2,
+            "text": "decide whether they can briefly leave the gate area."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The concept should give passengers enough confidence to decide whether they can briefly leave the gate area.",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The concept should give passengers enough confidence to decide whether they can briefly leave the gate area.",
+              "fontSize": 17.33,
+              "typeface": "Arial",
+              "color": "#5B7080",
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 26,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/twfmtw7q",
+      "id": "176",
+      "name": "Google Shape;176;g3fb9ba7439b_0_9",
+      "bbox": [
+        68.26,
+        826.92,
+        1228.66,
+        0
+      ],
+      "geometry": "straightConnector1",
+      "lineColor": "#D7E1E3",
+      "lineWidth": 1.18
+    },
+    {
+      "order": 27,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/8v650rq5",
+      "id": "177",
+      "name": "Google Shape;177;g3fb9ba7439b_0_9",
+      "bbox": [
+        68.26,
+        902.96,
+        1228.66,
+        76.82
+      ],
+      "geometry": "rect",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 0,
+          "right": 0,
+          "bottom": 0,
+          "left": 0
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": ""
+          }
+        ]
+      },
+      "fillColor": "#DA6E2E",
+      "lineWidth": 0
+    },
+    {
+      "order": 28,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/vyx4v6pg",
+      "id": "178",
+      "name": "Google Shape;178;g3fb9ba7439b_0_9",
+      "bbox": [
+        98.97,
+        925.33,
+        236.44,
+        30.87
+      ],
+      "geometry": "rect",
+      "text": "GATE-AGENT CONSTRAINT",
+      "textPreview": "GATE-AGENT CONSTRAINT",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "GATE-AGENT CONSTRAINT"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "GATE-AGENT CONSTRAINT",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "GATE-AGENT CONSTRAINT",
+              "fontSize": 16,
+              "typeface": "Arial",
+              "color": "#FFFFFF",
+              "bold": true,
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 29,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/uxon218b",
+      "id": "179",
+      "name": "Google Shape;179;g3fb9ba7439b_0_9",
+      "bbox": [
+        344.28,
+        919.29,
+        896.31,
+        35.72
+      ],
+      "geometry": "rect",
+      "text": "The solution should provide passenger guidance without increasing gate agents’ manual workload.",
+      "textPreview": "The solution should provide passenger guidance without increasing gate agents’ manual workload.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "resizeShapeToFitText",
+        "insets": {
+          "top": 5.69,
+          "right": 5.69,
+          "bottom": 5.69,
+          "left": 5.69
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "The solution should provide passenger guidance without increasing gate agents’ manual workload."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "The solution should provide passenger guidance without increasing gate agents’ manual workload.",
+          "lineSpacingPercent": 100000,
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "The solution should provide passenger guidance without increasing gate agents’ manual workload.",
+              "fontSize": 20,
+              "typeface": "Arial",
+              "color": "#FFFFFF",
+              "textTransform": "none"
+            }
+          ]
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 30,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/2547ql4f",
+      "id": "180",
+      "name": "Google Shape;180;g3fb9ba7439b_0_9",
+      "bbox": [
+        67.19,
+        167.24,
+        1228.66,
+        0
+      ],
+      "geometry": "straightConnector1",
+      "lineColor": "#C78712",
+      "lineWidth": 2.37
+    }
+  ],
+  "composeRuns": []
+}

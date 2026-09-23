@@ -2,7 +2,7 @@
 //  DiaryCardView.swift
 //  Slime
 //
-//  广场页卡片堆里的一张 = 一篇日记的全文 + 母鸡那句回应。
+//  广场页卡片堆里的一张 = 一篇日记的全文。
 //  取代了原来「DiaryEntryCell 列表 → 点开 DiaryDetailView」两层 ——
 //  一张就是全文，不用再往里走一层。
 //
@@ -22,10 +22,13 @@ final class DiaryCardView: UIView {
     /// 真正白色、带圆角的那一层
     private let surface = UIView()
     private let timeLabel = UILabel()
-    private let scrollView = UIScrollView()
+    private let scrollView = ContentScrollView()
     private let contentLabel = UILabel()
-    private let divider = UIView()
-    private let replyLabel = UILabel()
+
+    /// 卡片底部那层白色渐隐：下面还有没看到的内容时浮出来，滚到底就没了。
+    /// 卡片里不显示滚动条，这是唯一一个「还有更多」的提示
+    private let fade = FadeView()
+    private static let fadeHeight: CGFloat = 44
 
     // MARK: - 编辑模式（像桌面删 App：长按 → 抖 + 出叉 → 点叉）
 
@@ -58,16 +61,19 @@ final class DiaryCardView: UIView {
         surface.clipsToBounds = true
 
         contentLabel.numberOfLines = 0
-        replyLabel.numberOfLines = 0
-        divider.backgroundColor = UIColor(hex: 0xEAE4D6)
         scrollView.showsVerticalScrollIndicator = false
+        scrollView.delegate = self
+        // contentSize 是在 scrollView 自己的 layoutSubviews 里算出来的，
+        // 而那一步发生在本类的 layoutSubviews **之后**（布局是自上而下跑的）。
+        // 所以渐隐只能等它回报，不能在自己的 layoutSubviews 里读 —— 那时候读到的是 0
+        scrollView.onLayout = { [weak self] in self?.updateFade() }
 
         addSubview(surface)
         surface.addSubview(timeLabel)
         surface.addSubview(scrollView)
         scrollView.addSubview(contentLabel)
-        scrollView.addSubview(divider)
-        scrollView.addSubview(replyLabel)
+        // 加在 scrollView 之后 = 盖在它上面。它不吃触摸，手指照样能滚到底下的正文
+        surface.addSubview(fade)
 
         surface.snp.makeConstraints { make in
             make.edges.equalToSuperview()
@@ -80,21 +86,19 @@ final class DiaryCardView: UIView {
             make.top.equalTo(timeLabel.snp.bottom).offset(12)
             make.leading.trailing.bottom.equalToSuperview()
         }
-        // 竖直方向挂 contentLayoutGuide（撑出滚动高度），
-        // 水平方向挂 frameLayoutGuide（宽度锁死在卡片内，只能竖着滚）
+        // 四条边全挂 contentLayoutGuide —— 它的大小就是 contentSize，
+        // 少挂一边那个方向就没人定，算出来是 0。
+        // 宽度另外锁在 frameLayoutGuide 上：内容宽 == 卡片宽 = 横向没得滚，只能竖着滚
         contentLabel.snp.makeConstraints { make in
             make.top.equalTo(scrollView.contentLayoutGuide).offset(4)
-            make.leading.trailing.equalTo(scrollView.frameLayoutGuide).inset(26)
-        }
-        divider.snp.makeConstraints { make in
-            make.top.equalTo(contentLabel.snp.bottom).offset(22)
-            make.leading.trailing.equalTo(scrollView.frameLayoutGuide).inset(26)
-            make.height.equalTo(1)
-        }
-        replyLabel.snp.makeConstraints { make in
-            make.top.equalTo(divider.snp.bottom).offset(18)
-            make.leading.trailing.equalTo(scrollView.frameLayoutGuide).inset(26)
             make.bottom.equalTo(scrollView.contentLayoutGuide).offset(-28)
+            make.leading.trailing.equalTo(scrollView.contentLayoutGuide).inset(26)
+            make.width.equalTo(scrollView.frameLayoutGuide).offset(-52)
+        }
+        // 贴着卡片底边，跟着 surface 的圆角一起被裁掉
+        fade.snp.makeConstraints { make in
+            make.leading.trailing.bottom.equalToSuperview()
+            make.height.equalTo(Self.fadeHeight)
         }
 
         setupDeleteBadge()
@@ -180,11 +184,6 @@ final class DiaryCardView: UIView {
                                                   size: 14, color: Sky.ink(0.36))
         contentLabel.attributedText = AppFont.attributed(item.content, size: 18,
                                                      color: Sky.ink(0.86), lineHeight: 18 * 1.7)
-
-        let reply = item.reply?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        replyLabel.attributedText = reply.isEmpty ? nil
-            : AppFont.attributed(reply, size: 15, color: Sky.ink(0.5), lineHeight: 15 * 1.6)
-        divider.isHidden = reply.isEmpty
     }
 
     /// 被抽走、塞回堆底时调：下次轮到它时从头看
@@ -197,4 +196,71 @@ final class DiaryCardView: UIView {
         f.dateFormat = "HH:mm"
         return f
     }()
+}
+
+// MARK: - 底部渐隐
+
+extension DiaryCardView: UIScrollViewDelegate {
+
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        updateFade()
+    }
+
+    /// 下面还剩多少没露出来，就给多少不透明度。
+    ///
+    /// 用渐隐层自己的高度当换算尺度：剩的内容一旦短于这 44pt，它本来就落在渐隐区里，
+    /// 这时候按比例把渐隐一起淡掉，正好「你快看完了」和「已经看完了」是连续的，
+    /// 不会在最后一下啪地消失。
+    ///
+    /// 回弹过头时这个数会跑到 0 以下或 1 以上，夹住就行。
+    fileprivate func updateFade() {
+        let remaining = scrollView.contentSize.height
+            - scrollView.bounds.height
+            - scrollView.contentOffset.y
+        fade.alpha = min(max(remaining / Self.fadeHeight, 0), 1)
+    }
+}
+
+/// 一个会回报「我布局完了」的 scrollView。
+///
+/// 存在的唯一理由：`contentSize` 由 Auto Layout 在这个 `layoutSubviews` 里算出来，
+/// 外层想按它决定渐隐浓淡，就得等这一刻 —— 外层自己的 `layoutSubviews` 跑在这之前。
+private final class ContentScrollView: UIScrollView {
+
+    var onLayout: (() -> Void)?
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        onLayout?()
+    }
+}
+
+/// 一块纯渐变。
+///
+/// `layerClass` 换成 `CAGradientLayer` 之后，这个 view 的**根 layer 本身**就是渐变层 ——
+/// 于是它跟着 Auto Layout 自动改尺寸，不用在 layoutSubviews 里手动同步 frame
+/// （单独挂一个子 layer 就得手动同步，而且每次改 frame 还会带一段隐式动画）。
+private final class FadeView: UIView {
+
+    override class var layerClass: AnyClass { CAGradientLayer.self }
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isUserInteractionEnabled = false
+
+        let gradient = layer as! CAGradientLayer
+        // 必须用「透明度为 0 的白」，不能用 .clear ——
+        // .clear 是 (0,0,0,0)，是**黑色**的透明，往白色插值的路上会经过一片灰，
+        // 看起来像卡片底下脏了一块
+        let clearWhite = UIColor.white.withAlphaComponent(0)
+        gradient.colors = [clearWhite.cgColor,
+                           UIColor.white.withAlphaComponent(0.6).cgColor,
+                           UIColor.white.cgColor]
+        // 三个色标、上半段爬得慢：顶边不会留下一条看得见的起始线
+        gradient.locations = [0, 0.55, 1]
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
 }

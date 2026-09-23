@@ -33,8 +33,16 @@ final class HomeViewController: UIViewController {
     private let careCard = CareCardView()
     /// 正挂在屏幕上的那条。nil = 现在没露面。
     private var showingCareId: UUID?
-    /// 兜底淡出的定时器。用户没动作时，10 秒后自己走。
-    private var careTimeout: DispatchWorkItem?
+    /// 「真的被看到了」的定时器：滑出后活满这么久才把 firstSeenAt 落库。
+    private var careFirstSeen: DispatchWorkItem?
+
+    /// 滑出后活满几秒，才算这条话**真的被看到了**。
+    ///
+    /// 不能在 `slideIn()` 那一刻就记 —— 那记的是「播过动画」。
+    /// 用户一开 App 就点鸟巢，卡片刚冒头就被 `dismissCare()` 收掉了，
+    /// 那次要是算数，这条关怀从此就只剩安静形态，等于白说。
+    /// 被打断的那次不算，下次进首页它仍然享受完整的首次待遇。
+    private static let firstSeenDelay: TimeInterval = 3
 
     //注入组合根
     var makeComposeViewController: ((_ backdrop: UIImage?, _ onClose: @escaping () -> Void) -> UIViewController)?
@@ -100,6 +108,11 @@ final class HomeViewController: UIViewController {
         private func setupHeader() {
             dateLabel.numberOfLines = 1
             subLabel.numberOfLines = 1
+            // 关怀卡片的 lingering 形态就挤在这行右边，两个都想要宽度。
+            // 不把这行的抗压优先级顶到 required，Auto Layout 会选择压缩它 ——
+            // 「巢是空的」当场变成「···」，而卡片自己一行铺过去。
+            // 卡片那边是可以换行的，所以该让的是卡片。
+            subLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
             
             let stack = UIStackView(arrangedSubviews: [dateLabel, subLabel])
             stack.axis = .vertical
@@ -158,12 +171,35 @@ final class HomeViewController: UIViewController {
         private func setupCareCard() {
             careCard.isHidden = true
             view.addSubview(careCard)
-            careCard.snp.makeConstraints {
-                // 贴着头部那行小字下面，左边和它对齐；岛在 y=352，中间这块空着正好。
-                // 右边是「最多到」不是「等于」：气泡宽度跟着字走，一句短话就是个小泡泡
-                $0.top.equalTo(subLabel.snp.bottom).offset(26)
-                $0.leading.equalToSuperview().inset(34)
-                $0.trailing.lessThanOrEqualToSuperview().inset(34)
+            setCareForm(.speaking)
+        }
+
+        /// 换形态。**位置和形态必须一起改**，所以只留这一个口子 ——
+        /// 两种形态在屏幕上待的不是同一个地方。
+        private func setCareForm(_ form: CareCardView.Form) {
+            careCard.form = form
+            careCard.snp.remakeConstraints {
+                switch form {
+                case .speaking:
+                    // 贴着头部那行小字下面，左边和它对齐；岛在 y=352，中间这块空着正好。
+                    // 右边是「最多到」不是「等于」：气泡宽度跟着字走，一句短话就是个小泡泡
+                    $0.top.equalTo(subLabel.snp.bottom).offset(26)
+                    $0.leading.equalToSuperview().inset(34)
+                    $0.trailing.lessThanOrEqualToSuperview().inset(34)
+
+                case .lingering:
+                    // 缩到「巢是空的」那行的右边，和它齐平。
+                    //
+                    // 往上提 lingeringTopInset：卡片的上沿不是文字的上沿，
+                    // 中间隔着气泡的内缩，不减掉的话这行字会比左边那行矮一截。
+                    $0.top.equalTo(subLabel.snp.top).offset(-CareCardView.lingeringTopInset)
+                    $0.trailing.equalToSuperview().inset(34)
+                    // 左边只给下限，不给等号：宽度仍然跟着字走，短话就是个小块。
+                    // 贴着 subLabel 的右侧，**日期那行有多长都不会撞上** ——
+                    // 撞车的风险在「巢是空的 / 今天的蛋在巢里了」这两种长度之间，
+                    // 所以参照物只能是它，不能是写死的数。
+                    $0.leading.greaterThanOrEqualTo(subLabel.snp.trailing).offset(16)
+                }
             }
         }
 
@@ -177,33 +213,83 @@ final class HomeViewController: UIViewController {
             careCard.aimTail(atX: x, dt: dt)
         }
 
-        // MARK: - 关怀卡片的「单次露面」
+        // MARK: - 关怀卡片的露面
         //
-        // ⚠️ 这一整块只管露面，**不改任何关怀状态**。
+        // ⚠️ 这一整块只管**露面**，不碰关怀的 status。
         //    卡片淡出后 CareMessage 仍是 shown，下次进首页还会再来。
-        //    真正的退场由 CareEngine 的两条规则判定（新蛋诞生 / 满 3 天）。
+        //    真正的退场由 CareEngine 说了算（AI 判替换 / 满 3 天兜底）。
+        //
+        // 唯一写进库的是 firstSeenAt —— 它属于「露面的生命」，不是「内容的生命」：
+        // 记的是「这句话被看到过了」，不是「这句话该不该继续挂着」。
 
         private func presentCareIfNeeded() {
-            // 已经挂着就别重来，否则每次 dataDidChange 都会重放一遍动画
-            guard showingCareId == nil else { return }
-            guard let care = careViewModel?.activeCare() else { return }
+            // 不在眼前就别演。
+            //
+            // 挡的不是「白演一场」，是**会把这条关怀标记成看过了**：
+            // 从后台回来时用户可能停在广场页，`dataDidChange` 照样打到这儿，
+            // 卡片在没人看的首页上滑出、3 秒后落库 —— 这条关怀就这么白说了。
+            // 回到首页时 viewDidAppear / pageVisibilityDidChange 会再来一次。
+            guard isCurrentPage, !isCoverd else { return }
+
+            guard let care = careViewModel?.activeCare() else {
+                // 挂着的那条退场了（AI 换掉了、或满 3 天）—— 卡片跟着收掉。
+                // 卡片不会自己走（没有兜底定时器），**没有这一条它会一直挂着一句已经作废的话**。
+                dismissCare()
+                return
+            }
+
+            // 正演着的就是它，别重放
+            guard showingCareId != care.id else { return }
+
+            // 换了一条：旧的先淡出，走完再让新的开口。
+            // 不能直接盖上去 —— slideIn 会把 alpha 归零再弹回来，旧话新话会闪一下。
+            guard showingCareId == nil else {
+                dismissCare { [weak self] in self?.presentCareIfNeeded() }
+                return
+            }
 
             showingCareId = care.id
             careCard.setText(care.text)
-            careCard.slideIn()
 
-            // 兜底：用户就这么看着不动，10 秒后自己走
-            let work = DispatchWorkItem { [weak self] in self?.dismissCare() }
-            careTimeout = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 10, execute: work)
+            // 「说」还是「在」—— 整个分叉就在这一行。
+            // 一条关怀会在这里露面很多次（每次进首页、每次切 tab 回来都算），
+            // 但她**只说了一次**。第一次才配得上滑出和尾巴跟随。
+            if care.firstSeenAt == nil {
+                setCareForm(.speaking)
+                careCard.slideIn()
+                scheduleFirstSeen(for: care.id)
+                // **不设任何定时器**：第一次就从头清晰到尾。
+                // 中途自己淡掉会让人以为看漏了什么 —— 浅下去是下一次进首页的事。
+            } else {
+                setCareForm(.lingering)
+                careCard.appearQuietly()
+                // 它不是一次露面，是那句话还在。什么时候消失由关怀引擎说了算
+                // （AI 判替换 / 满 3 天兜底），UI 这边只在用户离开首页时收掉它。
+            }
         }
 
-        private func dismissCare() {
-            careTimeout?.cancel()
-            careTimeout = nil
-            guard showingCareId != nil else { return }
+        /// 排一个「活满 3 秒就算被看到」。中途被 `dismissCare()` 取消就不算数。
+        private func scheduleFirstSeen(for id: UUID) {
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.careFirstSeen = nil
+                // 传 id 而不是读 showingCareId：这 3 秒里引擎完全可能换了一条，
+                // 要记的仍然是**刚才滑出来的那条**。
+                self.careViewModel?.markSeen(id)
+            }
+            careFirstSeen = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.firstSeenDelay, execute: work)
+        }
+
+        /// 真的把卡片收掉：用户要操作页面、离开首页，或者这条关怀已经作废。
+        /// `completion` 给「换一条」用 —— 旧的淡完才轮到新的开口。
+        private func dismissCare(completion: (() -> Void)? = nil) {
+            // 没活满 3 秒就被收掉 —— 这次不算「被看到」，下次还是首次
+            careFirstSeen?.cancel()
+            careFirstSeen = nil
+            guard showingCareId != nil else { completion?(); return }
             showingCareId = nil
-            careCard.fadeOut()
+            careCard.fadeOut(completion: completion)
         }
 
         override func viewDidLayoutSubviews() {
@@ -273,6 +359,10 @@ final class HomeViewController: UIViewController {
     private func setCovered(_ covered: Bool) {
         isCoverd = covered
         syncRunningState()
+        // 写日记 / 聊天的浮层关了，关怀可以回来了。
+        // 它们是 overFullScreen，关掉**不走 viewDidAppear** ——
+        // 没有这一句，卡片要等到下次进首页才出现。
+        if !covered { presentCareIfNeeded() }
         
 //        UIView.animate(withDuration: 0.42, delay: 0, usingSpringWithDamping: 0.86, initialSpringVelocity: 0) {
 //            self.view.transform = covered ? CGAffineTransform(scaleX: 0.94, y: 0.94) : .identity
@@ -331,7 +421,9 @@ final class HomeViewController: UIViewController {
             let dt = min(link.timestamp - lastTimestamp, 1.0 / 20.0)
             lastTimestamp = link.timestamp
             island.tick(dt: dt)
-            if showingCareId != nil { aimCareTail(dt: dt) }
+            // 尾巴跟着母鸡走是「这话正从她嘴里出来」的语言，只属于首次那一次露面。
+            // lingering 形态下尾巴定在中间不动 —— 那句话已经说完了。
+            if showingCareId != nil, careCard.form == .speaking { aimCareTail(dt: dt) }
 
             
         }
@@ -343,8 +435,14 @@ extension HomeViewController: RootPage {
     func pageVisibilityDidChange(isCurrent: Bool) {
         isCurrentPage = isCurrent
         syncRunningState()
-        // 左滑去周条了 —— 也算「开始操作页面」，卡片让路
-        if !isCurrent { dismissCare() }
+        if isCurrent {
+            // 回到首页。这个回调和 viewDidAppear 谁先谁后不好说，两边都调一次 ——
+            // presentCareIfNeeded 是幂等的（正演着的那条不会重放）。
+            presentCareIfNeeded()
+        } else {
+            // 去广场页了 —— 也算「开始操作」，卡片让路
+            dismissCare()
+        }
     }
 
     /// CareEngine 是在 sceneDidBecomeActive 的 Task 里跑的，

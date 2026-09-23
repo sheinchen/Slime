@@ -24,6 +24,14 @@ protocol CareMessageStore {
     
     /// 最近几条关怀，带「是否仍挂着」。给 AI 判断该保持还是该换。
     func recentCares(limit: Int) -> [PastCare]
+
+    /// 记下这条话**第一次真正被看到**的时刻。
+    ///
+    /// 「真正被看到」不等于「播过动画」：用户一开 App 就点鸟巢，卡片刚滑出就被
+    /// `dismissCare()` 收掉了 —— 那次不算。判定在 UI 层（滑出后活满几秒才调这里）。
+    ///
+    /// **幂等**：已经有值就不覆盖。记的是第一次，不是最近一次。
+    func markFirstSeen(id: UUID, at date: Date)
 }
 
 
@@ -44,7 +52,7 @@ final class CoreDataCareMessageStore: CareMessageStore {
           request.sortDescriptors = [NSSortDescriptor(keyPath: \CareMessage.createdAt, ascending: false)]
           request.fetchLimit = 1
           guard let e = try? context.fetch(request).first else { return nil }
-          return PendingCare(id: e.id, text: e.text, createdAt: e.createdAt)
+          return PendingCare(id: e.id, text: e.text, createdAt: e.createdAt, firstSeenAt: e.firstSeenAt)
       }
     
     func show(text: String, referencedDates: [Date], now: Date) {
@@ -75,6 +83,18 @@ final class CoreDataCareMessageStore: CareMessageStore {
          return (try? context.fetch(request))?.first?.retiredAt
      }
     
+    func markFirstSeen(id: UUID, at date: Date) {
+        let request = CareMessage.fetchRequest()
+        // 按 id 查，不按 status —— 卡片露面到写这一笔之间隔着几秒，
+        // 这中间引擎完全可能已经把它换掉了。那时候要写的仍是**它**，不是新上任的那条。
+        request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
+        request.fetchLimit = 1
+        guard let e = try? context.fetch(request).first else { return }
+        guard e.firstSeenAt == nil else { return }   // 幂等：只记第一次
+        e.firstSeenAt = date
+        saveIfNeeded()
+    }
+
     func recentCares(limit: Int) -> [PastCare] {
             let request = CareMessage.fetchRequest()
             request.sortDescriptors = [NSSortDescriptor(keyPath: \CareMessage.createdAt, ascending: false)]

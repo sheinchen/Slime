@@ -30,8 +30,35 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let postRepo = CoreDataPostRepository()
         let careMessages = CoreDataCareMessageStore()
         let eggStore = CoreDataDayEggStore()
-        let aiService = DeepSeekAIService()
-        let eggService = DayEggService(posts: postRepo, eggs: eggStore)
+        let realAI = DeepSeekAIService()
+
+        // —— AI 打桩开关。只在 Debug 生效，Release 分支里根本没有 stub 这个符号 ——
+        //
+        // 每个位置**各自**选实现，靠的是 AI 能力一开始就拆成了窄协议
+        // （CareDeciding / DayEggSummarizing / AIService / RecallIntentExtracting /
+        // RecallReranking），每个消费者只认自己那一个。
+        // 于是「测关怀」和「测检索」可以互不干扰：
+        //   -StubCare  关怀决策固定（配 -StubQuiet 翻成固定不说）
+        //   -StubEgg   孵蛋总结固定，省掉等待和 API 调用
+        //   -StubChat  聊天回复固定
+        //   -StubAI    全部打桩，**包括检索那两路** —— 只用来验管道，验不了检索质量
+        #if DEBUG
+        let stubAI = StubAIService()
+        let args = CommandLine.arguments
+        let stubAll = args.contains("-StubAI")
+        let careAI:   any CareDeciding           = (stubAll || args.contains("-StubCare")) ? stubAI : realAI
+        let eggAI:    any DayEggSummarizing      = (stubAll || args.contains("-StubEgg"))  ? stubAI : realAI
+        let chatAI:   any AIService              = (stubAll || args.contains("-StubChat")) ? stubAI : realAI
+        let intentAI: any RecallIntentExtracting = stubAll ? stubAI : realAI
+        let rerankAI: any RecallReranking        = stubAll ? stubAI : realAI
+        #else
+        let careAI:   any CareDeciding           = realAI
+        let eggAI:    any DayEggSummarizing      = realAI
+        let chatAI:   any AIService              = realAI
+        let intentAI: any RecallIntentExtracting = realAI
+        let rerankAI: any RecallReranking        = realAI
+        #endif
+        let eggService = DayEggService(posts: postRepo, eggs: eggStore, summarizer: eggAI)
         
         let chatRepo = CoreDataChatRepository()
         
@@ -44,8 +71,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let recallService = embedder.map {
             RecallService(posts: postRepo,
                           embedder: $0,
-                          ai: aiService,
-                          reranker: aiService)
+                          ai: intentAI,
+                          reranker: rerankAI)
         }
         
         let careChecks = CoreDataCareCheckStore()
@@ -55,10 +82,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let careEngine = CareEngine(gate: careGate,
                                     messages: careMessages,
                                     checks: careChecks,
-                                    ai: aiService)
+                                    ai: careAI)
 
 
-        let composeVM = ComposeViewModel(repository: postRepo, aiService: aiService)
+        let composeVM = ComposeViewModel(repository: postRepo, aiService: chatAI)
         let squareVM = SquareViewModel(repository: postRepo, eggService: eggService)
         let homeVC = HomeViewController()
         homeVC.careViewModel = CareViewModel(messages: careMessages)
@@ -76,7 +103,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             let vm = ChatViewModel(origin: .direct,
                                    chatRepo: chatRepo,
                                    posts: postRepo,
-                                   aiService: aiService,
+                                   aiService: chatAI,
                                    recall: recallService)
             return ChatViewController(viewModel: vm)
         }
@@ -99,26 +126,51 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         //测试seed
         #if DEBUG
         // 只在测试库上生效；正式库会被 DebugSeeder 自己挡掉，不用加判断。
+        // 参数在 Edit Scheme → Run → Arguments → Arguments Passed On Launch 里配。
         //
-        // 两幕场景，用启动参数切（Edit Scheme → Run → Arguments）：
-        //  第一幕（不加参数）：清库 + 播 5 天低落 → 闸门放行 → AI 生成关怀 A
-        //  第二幕（加 -CareStep2）：保留 A，只把「昨天」重孵成 happy
-        //      → 上次的关怀还挂着 + 今天有新蛋 → 看 AI 是保持 A 还是换成新的
-        //  第三幕（加 -CareStep3）：保留上一幕的关怀，补一颗平淡的蛋
-        //      → 有新蛋能过闸门，但没有实质变化 → 看 AI 是否保持、本地是否不误退场
+        // ⚠️ **不带参数 = 什么都不播**，直接用上次留下的库。
+        //    这一档是必需的：关怀「下次进首页还在吗」、聊天记录还在吗、蛋有没有落库，
+        //    都得能重启 App 而**不清库**才验得了。
+        //    （以前默认档是 reset，一重启数据就全没了，那两项根本没法手点验证。）
         //
-        // 另有一套跟关怀无关的（加 -SeedDiaries）：21 天里 14 天有记录、每篇一件具体的事，
-        //  给验删除、卡片堆、周条、月历用。详见 DebugSeeder+Diaries.swift
-        if CommandLine.arguments.contains("-SeedDiaries") {
+        // —— 造数据，**会清库**（连关怀和检查日志一起清，所以启动时会重新评估一次）——
+        //  -SeedLife     半年生活：近 14 天连着低落 + 往前半年埋了检索用例。**主力语料**
+        //  -SeedFlat     14 天全平稳 → 闸门会放行，但 AI 该否决（验一票否决权）
+        //  -SeedThin     只有 2 天   → 闸门②天数不足，**根本不调 AI**
+        //  -SeedDiaries  20 天具体日记，给删除 / 卡片堆 / 周条 / 月历用
+        //  -SeedLegacy   老的 5 天 sad，留着对照
+        //
+        // —— 在上次留下的库上动一点，**不清库、不清关怀**（接着上一幕演）——
+        //  -CareTurn   把昨天重孵成 happy    → 有新证据且是转折，看 AI 换不换新话
+        //  -CareFlat   补一颗平淡的蛋        → 能过闸门但没实质变化，看 AI 保不保持
+        //  -CareLate   补一颗 5 天前的蛋     → 日期早于关怀那天，isNew 该是 false
+        //  -CareAge    把挂着的关怀推老 4 天 → 验「满 3 天必退」这条本地兜底
+        //
+        // args 是上面 AI 打桩那段声明的，这里复用。
+        if args.contains("-SeedLife") {
+            DebugSeeder.seedLife()
+        } else if args.contains("-SeedFlat") {
+            DebugSeeder.seedFlat()
+        } else if args.contains("-SeedThin") {
+            DebugSeeder.seedThin()
+        } else if args.contains("-SeedDiaries") {
             DebugSeeder.seedDiaries()
-        } else if CommandLine.arguments.contains("-CareStep3") {
-            DebugSeeder.hatchNow(daysAgo: 2, emotion: .calm,
-                                 text: "普通的一天，把手边的事做完了")
-        } else if CommandLine.arguments.contains("-CareStep2") {
+        } else if args.contains("-SeedLegacy") {
+            DebugSeeder.reset(to: [.sad, .sad, .tired, .sad, .sad], withEggs: true)
+        } else if args.contains("-CareTurn") || args.contains("-CareStep2") {
             DebugSeeder.hatchNow(daysAgo: 1, emotion: .happy,
                                  text: "过了！晚上和朋友吃了顿好的")
-        } else {
-            DebugSeeder.reset(to: [.sad, .sad, .tired, .sad, .sad], withEggs: true)
+        } else if args.contains("-CareFlat") || args.contains("-CareStep3") {
+            DebugSeeder.hatchNow(daysAgo: 2, emotion: .calm,
+                                 text: "普通的一天，把手边的事做完了")
+        } else if args.contains("-CareLate") {
+            // 日期早于关怀那天、但孵出时刻是现在 —— `PastCare.isNewEvidence` 该判 false。
+            // 「跨天看日期」那条判据就是为这种迟补的旧蛋写的：
+            // 孵出时刻很新，内容却很旧，按时刻比会被误标成新证据。
+            DebugSeeder.hatchNow(daysAgo: 5, emotion: .sad,
+                                 text: "那天其实也不太好过，只是当时没写")
+        } else if args.contains("-CareAge") {
+            DebugSeeder.ageActiveCare()
         }
         #endif
         // 3. 让 window 显示出来,并持有它(存到属性里,不然会被释放)

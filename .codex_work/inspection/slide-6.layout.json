@@ -1,0 +1,1091 @@
+{
+  "schema": "openai.presentation.layout/v4",
+  "unit": "px",
+  "slide": {
+    "aid": "sl/x8f69ofe",
+    "id": "x8f69ofe",
+    "slide": 6,
+    "layoutId": "/ppt/slideLayouts/slideLayout13.xml",
+    "layoutName": "TITLE",
+    "layoutType": "title",
+    "masterLayoutId": "/ppt/slideMasters/slideMaster2.xml",
+    "backgroundColor": "#FFFFFF",
+    "frame": {
+      "left": 0,
+      "top": 0,
+      "width": 1365.17,
+      "height": 1023.83
+    }
+  },
+  "theme": {
+    "colorSchemeName": "Office",
+    "colors": {
+      "accent1": "#4F81BD",
+      "accent2": "#C0504D",
+      "accent3": "#9BBB59",
+      "accent4": "#8064A2",
+      "accent5": "#4BACC6",
+      "accent6": "#F79646",
+      "dk1": "#000000",
+      "lt1": "#FFFFFF",
+      "dk2": "#1F497D",
+      "lt2": "#EEECE1",
+      "hlink": "#0000FF",
+      "folHlink": "#800080"
+    },
+    "fontScheme": {
+      "name": "Office",
+      "majorFont": {
+        "latinTypeface": "Arial"
+      },
+      "minorFont": {
+        "latinTypeface": "Arial"
+      }
+    },
+    "typefaces": [
+      "Arial"
+    ]
+  },
+  "inheritedLayers": [
+    {
+      "scope": "layout",
+      "id": "/ppt/slideLayouts/slideLayout13.xml",
+      "name": "TITLE",
+      "type": "title",
+      "parentLayoutId": "/ppt/slideMasters/slideMaster2.xml",
+      "elements": []
+    },
+    {
+      "scope": "master",
+      "id": "/ppt/slideMasters/slideMaster2.xml",
+      "type": "master",
+      "backgroundColor": "lt1",
+      "elements": []
+    }
+  ],
+  "elements": [
+    {
+      "order": 1,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/fyx4v2lc",
+      "id": "186",
+      "name": "Google Shape;186;h713b34333cad98a0_2_0",
+      "bbox": [
+        68.26,
+        62.57,
+        1215.85,
+        92.43
+      ],
+      "geometry": "rect",
+      "text": "Smart Queue Window",
+      "textPreview": "Smart Queue Window",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 5.69,
+          "right": 11.38,
+          "bottom": 5.69,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Smart Queue Window"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Smart Queue Window",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Smart Queue Window",
+              "fontSize": 57.33,
+              "typeface": "Arial",
+              "color": "#4A2B16",
+              "bold": true
+            }
+          ],
+          "lineSpacingPercent": 100000
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 2,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/uxo32x4r",
+      "id": "187",
+      "name": "Google Shape;187;h713b34333cad98a0_2_0",
+      "bbox": [
+        68.26,
+        173.48,
+        1215.85,
+        59.72
+      ],
+      "geometry": "rect",
+      "text": "Live boarding queue information for economy-class passengers",
+      "textPreview": "Live boarding queue information for economy-class passengers",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 5.69,
+          "right": 11.38,
+          "bottom": 5.69,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Live boarding queue information for economy-class passengers"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Live boarding queue information for economy-class passengers",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Live boarding queue information for economy-class passengers",
+              "fontSize": 32,
+              "typeface": "Arial",
+              "color": "#765B49"
+            }
+          ],
+          "lineSpacingPercent": 100000
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 3,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/p4zm1c3e",
+      "id": "188",
+      "name": "Google Shape;188;h713b34333cad98a0_2_0",
+      "bbox": [
+        68.26,
+        317.1,
+        383.95,
+        362.61
+      ],
+      "geometry": "rect",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 11.38,
+          "right": 11.38,
+          "bottom": 11.38,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": ""
+          }
+        ]
+      },
+      "fillColor": "#FCE8D4",
+      "lineWidth": 0
+    },
+    {
+      "order": 4,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/43ql872t",
+      "id": "189",
+      "name": "Google Shape;189;h713b34333cad98a0_2_0",
+      "bbox": [
+        89.59,
+        346.97,
+        341.29,
+        73.94
+      ],
+      "geometry": "rect",
+      "text": "01  Monitor the queue",
+      "textPreview": "01  Monitor the queue",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 5.69,
+          "right": 11.38,
+          "bottom": 5.69,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "01  Monitor the"
+          },
+          {
+            "index": 2,
+            "text": "queue"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "01  Monitor the queue",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "01  Monitor the queue",
+              "fontSize": 32,
+              "typeface": "Arial",
+              "color": "#D7651E",
+              "bold": true
+            }
+          ],
+          "lineSpacingPercent": 100000
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 5,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mxgr6pgf",
+      "id": "190",
+      "name": "Google Shape;190;h713b34333cad98a0_2_0",
+      "bbox": [
+        89.59,
+        440.82,
+        341.29,
+        210.45
+      ],
+      "geometry": "rect",
+      "text": "Use anonymous people counting to estimate queue length and passenger numbers.",
+      "textPreview": "Use anonymous people counting to estimate queue length and passenger numbers.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 5.69,
+          "right": 11.38,
+          "bottom": 5.69,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 5,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Use anonymous"
+          },
+          {
+            "index": 2,
+            "text": "people counting to"
+          },
+          {
+            "index": 3,
+            "text": "estimate queue length"
+          },
+          {
+            "index": 4,
+            "text": "and passenger"
+          },
+          {
+            "index": 5,
+            "text": "numbers."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Use anonymous people counting to estimate queue length and passenger numbers.",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Use anonymous people counting to estimate queue length and passenger numbers.",
+              "fontSize": 30.67,
+              "typeface": "Arial",
+              "color": "#4A2B16"
+            }
+          ],
+          "lineSpacingPercent": 100000
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 6,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ny9sfax0",
+      "id": "191",
+      "name": "Google Shape;191;h713b34333cad98a0_2_0",
+      "bbox": [
+        459.68,
+        470.68,
+        23.46,
+        35.55
+      ],
+      "geometry": "rightArrow",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 11.38,
+          "right": 11.38,
+          "bottom": 11.38,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": ""
+          }
+        ]
+      },
+      "fillColor": "#D7651E",
+      "lineWidth": 0
+    },
+    {
+      "order": 7,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/ozi98fy5",
+      "id": "192",
+      "name": "Google Shape;192;h713b34333cad98a0_2_0",
+      "bbox": [
+        490.61,
+        317.1,
+        383.95,
+        362.61
+      ],
+      "geometry": "rect",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 11.38,
+          "right": 11.38,
+          "bottom": 11.38,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": ""
+          }
+        ]
+      },
+      "fillColor": "#FCE8D4",
+      "lineWidth": 0
+    },
+    {
+      "order": 8,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/90rahkfq",
+      "id": "193",
+      "name": "Google Shape;193;h713b34333cad98a0_2_0",
+      "bbox": [
+        511.94,
+        346.97,
+        341.29,
+        73.94
+      ],
+      "geometry": "rect",
+      "text": "02  Estimate a window",
+      "textPreview": "02  Estimate a window",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 5.69,
+          "right": 11.38,
+          "bottom": 5.69,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "02  Estimate a"
+          },
+          {
+            "index": 2,
+            "text": "window"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "02  Estimate a window",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "02  Estimate a window",
+              "fontSize": 32,
+              "typeface": "Arial",
+              "color": "#D7651E",
+              "bold": true
+            }
+          ],
+          "lineSpacingPercent": 100000
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 9,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/a10rapgb",
+      "id": "194",
+      "name": "Google Shape;194;h713b34333cad98a0_2_0",
+      "bbox": [
+        511.94,
+        440.82,
+        341.29,
+        210.45
+      ],
+      "geometry": "rect",
+      "text": "Use live queue data, boarding progress, boarding group and walking time.",
+      "textPreview": "Use live queue data, boarding progress, boarding group and walking time.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 5.69,
+          "right": 11.38,
+          "bottom": 5.69,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 4,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Use live queue data,"
+          },
+          {
+            "index": 2,
+            "text": "boarding progress,"
+          },
+          {
+            "index": 3,
+            "text": "boarding group and"
+          },
+          {
+            "index": 4,
+            "text": "walking time."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Use live queue data, boarding progress, boarding group and walking time.",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Use live queue data, boarding progress, boarding group and walking time.",
+              "fontSize": 30.67,
+              "typeface": "Arial",
+              "color": "#4A2B16"
+            }
+          ],
+          "lineSpacingPercent": 100000
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 10,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/b29sjuxw",
+      "id": "195",
+      "name": "Google Shape;195;h713b34333cad98a0_2_0",
+      "bbox": [
+        882.02,
+        470.68,
+        23.46,
+        35.55
+      ],
+      "geometry": "rightArrow",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 11.38,
+          "right": 11.38,
+          "bottom": 11.38,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": ""
+          }
+        ]
+      },
+      "fillColor": "#D7651E",
+      "lineWidth": 0
+    },
+    {
+      "order": 11,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/w3i9czyh",
+      "id": "196",
+      "name": "Google Shape;196;h713b34333cad98a0_2_0",
+      "bbox": [
+        912.95,
+        317.1,
+        383.95,
+        362.61
+      ],
+      "geometry": "rect",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 2,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "middle",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 11.38,
+          "right": 11.38,
+          "bottom": 11.38,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": ""
+          }
+        ]
+      },
+      "fillColor": "#FCE8D4",
+      "lineWidth": 0
+    },
+    {
+      "order": 12,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/x4ral4f2",
+      "id": "197",
+      "name": "Google Shape;197;h713b34333cad98a0_2_0",
+      "bbox": [
+        934.29,
+        346.97,
+        341.29,
+        73.94
+      ],
+      "geometry": "rect",
+      "text": "03  Check remotely",
+      "textPreview": "03  Check remotely",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 5.69,
+          "right": 11.38,
+          "bottom": 5.69,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "03  Check remotely"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "03  Check remotely",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "03  Check remotely",
+              "fontSize": 32,
+              "typeface": "Arial",
+              "color": "#D7651E",
+              "bold": true
+            }
+          ],
+          "lineSpacingPercent": 100000
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 13,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/y5kre9wn",
+      "id": "198",
+      "name": "Google Shape;198;h713b34333cad98a0_2_0",
+      "bbox": [
+        934.29,
+        440.82,
+        341.29,
+        210.45
+      ],
+      "geometry": "rect",
+      "text": "See crowding, estimated standing time and a suggested queue window away from the gate.",
+      "textPreview": "See crowding, estimated standing time and a suggested queue window away from the gate.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 5.69,
+          "right": 11.38,
+          "bottom": 5.69,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 5,
+        "lines": [
+          {
+            "index": 1,
+            "text": "See crowding,"
+          },
+          {
+            "index": 2,
+            "text": "estimated standing"
+          },
+          {
+            "index": 3,
+            "text": "time and a suggested"
+          },
+          {
+            "index": 4,
+            "text": "queue window away"
+          },
+          {
+            "index": 5,
+            "text": "from the gate."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "See crowding, estimated standing time and a suggested queue window away from the gate.",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "See crowding, estimated standing time and a suggested queue window away from the gate.",
+              "fontSize": 30.67,
+              "typeface": "Arial",
+              "color": "#4A2B16"
+            }
+          ],
+          "lineSpacingPercent": 100000
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 14,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/j6tsnuxs",
+      "id": "199",
+      "name": "Google Shape;199;h713b34333cad98a0_2_0",
+      "bbox": [
+        68.26,
+        747.97,
+        271.97,
+        54.04
+      ],
+      "geometry": "rect",
+      "text": "Passenger access",
+      "textPreview": "Passenger access",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 5.69,
+          "right": 11.38,
+          "bottom": 5.69,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Passenger"
+          },
+          {
+            "index": 2,
+            "text": "access"
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Passenger access",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Passenger access",
+              "fontSize": 29.33,
+              "typeface": "Arial",
+              "color": "#D7651E",
+              "bold": true
+            }
+          ],
+          "lineSpacingPercent": 100000
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 15,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/mhgn2pk3",
+      "id": "200",
+      "name": "Google Shape;200;h713b34333cad98a0_2_0",
+      "bbox": [
+        68.26,
+        813.38,
+        1215.85,
+        110.92
+      ],
+      "geometry": "rect",
+      "text": "Scan a boarding pass or tap a supported digital pass.\nCheck a mobile webpage or kiosks around the airport. No new app required.",
+      "textPreview": "Scan a boarding pass or tap a supported digital pass. | Check a mobile webpage or kiosks around the airport. No new app required.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 5.69,
+          "right": 11.38,
+          "bottom": 5.69,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 2,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Scan a boarding pass or tap a supported digital pass."
+          },
+          {
+            "index": 2,
+            "text": "Check a mobile webpage or kiosks around the airport. No new app required."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Scan a boarding pass or tap a supported digital pass.",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Scan a boarding pass or tap a supported digital pass.",
+              "fontSize": 30.67,
+              "typeface": "Arial",
+              "color": "#4A2B16"
+            }
+          ],
+          "lineSpacingPercent": 100000
+        },
+        {
+          "index": 2,
+          "text": "Check a mobile webpage or kiosks around the airport. No new app required.",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Check a mobile webpage or kiosks around the airport. No new app required.",
+              "fontSize": 30.67,
+              "typeface": "Arial",
+              "color": "#4A2B16"
+            }
+          ],
+          "lineSpacingPercent": 100000
+        }
+      ],
+      "lineWidth": 0
+    },
+    {
+      "order": 16,
+      "kind": "shape",
+      "scope": "slide",
+      "aid": "sh/nipobu1o",
+      "id": "201",
+      "name": "Google Shape;201;h713b34333cad98a0_2_0",
+      "bbox": [
+        68.26,
+        958.42,
+        1226.52,
+        35.55
+      ],
+      "geometry": "rect",
+      "text": "Proposed integration: existing boarding scans provide throughput. Staff do not assign individual windows.",
+      "textPreview": "Proposed integration: existing boarding scans provide throughput. Staff do not assign individual windows.",
+      "resolvedFontSize": 18.67,
+      "resolvedTextStyle": {
+        "anchor": 1,
+        "fontSize": 18.67,
+        "typeface": "Arial",
+        "color": "#000000",
+        "alignment": "left",
+        "verticalAlignment": "top",
+        "textTransform": "none",
+        "wrap": "square",
+        "autoFit": "none",
+        "insets": {
+          "top": 5.69,
+          "right": 11.38,
+          "bottom": 5.69,
+          "left": 11.38
+        },
+        "useParagraphSpacing": true
+      },
+      "textLayout": {
+        "lineCount": 1,
+        "lines": [
+          {
+            "index": 1,
+            "text": "Proposed integration: existing boarding scans provide throughput. Staff do not assign individual windows."
+          }
+        ]
+      },
+      "paragraphs": [
+        {
+          "index": 1,
+          "text": "Proposed integration: existing boarding scans provide throughput. Staff do not assign individual windows.",
+          "resolvedTextStyle": {
+            "alignment": "left"
+          },
+          "runs": [
+            {
+              "index": 1,
+              "text": "Proposed integration: existing boarding scans provide throughput. Staff do not assign individual windows.",
+              "fontSize": 20,
+              "typeface": "Arial",
+              "color": "#765B49"
+            }
+          ],
+          "lineSpacingPercent": 100000
+        }
+      ],
+      "lineWidth": 0
+    }
+  ],
+  "composeRuns": []
+}

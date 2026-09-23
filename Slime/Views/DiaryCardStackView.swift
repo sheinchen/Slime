@@ -14,7 +14,7 @@
 import UIKit
 import SnapKit
 
-final class DiaryCardStackView: UIView {
+final class DiaryCardStackView: UIView, UIGestureRecognizerDelegate {
 
     // MARK: - 手感
 
@@ -55,6 +55,9 @@ final class DiaryCardStackView: UIView {
 
     override init(frame: CGRect) {
         super.init(frame: frame)
+        // delegate 必须挂 —— 方向过滤写在 gestureRecognizerShouldBegin 里，
+        // 而那个方法只有作为**手势 delegate** 时才会被调到。详见那个方法上的注释
+        pan.delegate = self
         addGestureRecognizer(pan)
         // 长按不会跟横拖打架：长按要求手指不动，一动就失败，拖动才开始
         addGestureRecognizer(longPress)
@@ -186,10 +189,18 @@ final class DiaryCardStackView: UIView {
 
     // MARK: - 拖动
 
-    /// 只接横着的拖。竖着拖留给卡片里的全文滚动。
+    /// 只接横着的拖，竖着拖留给卡片里的全文滚动。这是抽卡和滚正文的分工线。
     ///
-    /// 这是 UIView 自己的方法，不是手势代理 —— 挂在这个 view 上的所有手势
-    /// （包括长按和退出编辑的点击）开始前都会来问一遍，所以先认清是不是自己的 pan。
+    /// ⚠️ **光写这个方法没用，init 里必须同时 `pan.delegate = self`。**
+    /// `UIView` 和 `UIGestureRecognizerDelegate` 上各有一个同名同签名的方法，
+    /// 在 UIView 子类里它们是同一个选择器 —— 所以这里只能写 `override`
+    /// （写进扩展里会报「requires an 'override' keyword」，而扩展又不许 override）。
+    /// 但 `override` 只保证它能作为**代理方法**被调到；作为 UIView 自己那个方法，
+    /// 实测一次都不会被调。没挂 delegate 时它就是一段死代码：能编译、不报错、不警告。
+    ///
+    /// 漏掉的后果不是「横拖失灵」（那样立刻就发现了），而是这个 pan 把**所有**方向的
+    /// 拖动都吃掉，再配上 `scrollPan.require(toFail: pan)`，正文就永远滚不起来。
+    /// 日记短的时候本来就没得滚，所以这个洞能一直藏着。
     override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard gestureRecognizer === pan else {
             return super.gestureRecognizerShouldBegin(gestureRecognizer)
