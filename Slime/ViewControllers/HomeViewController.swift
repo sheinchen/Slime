@@ -113,6 +113,15 @@ final class HomeViewController: UIViewController {
             // 「巢是空的」当场变成「···」，而卡片自己一行铺过去。
             // 卡片那边是可以换行的，所以该让的是卡片。
             subLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+
+            #if DEBUG
+            // 关怀 debug 页的入口:长按日期。
+            // **不加任何可见 UI** —— 它是开发工具,不该在产品界面上留痕迹。
+            // UILabel 默认不收触摸,要显式打开。
+            dateLabel.isUserInteractionEnabled = true
+            dateLabel.addGestureRecognizer(
+                UILongPressGestureRecognizer(target: self, action: #selector(openCareDebug)))
+            #endif
             
             let stack = UIStackView(arrangedSubviews: [dateLabel, subLabel])
             stack.axis = .vertical
@@ -129,6 +138,15 @@ final class HomeViewController: UIViewController {
             ])
         }
         
+        #if DEBUG
+        @objc private func openCareDebug(_ g: UILongPressGestureRecognizer) {
+            guard g.state == .began else { return }   // 长按会连发多次，只认第一下
+            UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
+            present(UINavigationController(rootViewController: CareDebugViewController()),
+                    animated: true)
+        }
+        #endif
+
         private func setupIsland() {
             // 影子不跟着岛一起浮 —— 它贴在地上，只做缩放和明暗的呼吸
             islandShadow.type = .radial
@@ -445,9 +463,14 @@ extension HomeViewController: RootPage {
         }
     }
 
-    /// CareEngine 是在 sceneDidBecomeActive 的 Task 里跑的，
-    /// 跑完时 viewDidAppear 多半已经过去了 —— 所以要靠这个回调再看一眼。
+    /// 两件事：
+    /// ① 日期标题重画。它以前只在 viewDidLoad 画过一次，App 在后台挂一夜回来，
+    ///    标题还写着昨天。进前台、跨零点时组合根都会广播到这儿。
+    ///    重画是幂等的，同一天里多画几次无所谓，所以不用判断「日子变了没有」。
+    /// ② 关怀卡片再看一眼。CareEngine 是在进前台那一轮流程里跑的，
+    ///    跑完时 viewDidAppear 多半已经过去了 —— 不靠这个回调卡片就不会出现。
     func dataDidChange() {
+        updateCopy()
         presentCareIfNeeded()
     }
 }

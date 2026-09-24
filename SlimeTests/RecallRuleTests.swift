@@ -17,7 +17,7 @@ final class RecallRuleTests: XCTestCase {
     /// 固定时刻。**测试绝不能依赖「今天」**，否则跨零点跑就会飘。
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
 
-    private func doc(daysAgo: Int, _ text: String, _ emotion: SlimeEmotion = .calm) -> RecallDocument {
+    private func doc(daysAgo: Int, _ text: String, _ emotion: SlimeEmotion? = .calm) -> RecallDocument {
         RecallDocument(id: RecallEvalCorpus.id(daysAgo: daysAgo),
                        date: now.addingTimeInterval(TimeInterval(-daysAgo * 86_400)),
                        text: text,
@@ -64,6 +64,20 @@ final class RecallRuleTests: XCTestCase {
 
         XCTAssertEqual(hits.first?.document.id, tiredMatch.id)
         XCTAssertFalse(hits.contains { $0.document.id == emotionOnly.id })
+    }
+
+    func test_没被AI读过的日记照样能被关键词捞上来_但情绪那一路不给分() {
+        // 没网时写的日记没有情绪（nil）。它不能因此在检索里消失，
+        // 也不能被当成 calm 去跟别人比 —— 查询情绪故意用 calm：
+        // 要是 nil 被悄悄兜成了 calm，这篇就会在情绪那一路上榜。
+        let unread = doc(daysAgo: 1, "组长又改需求", nil)
+
+        let hits = RecallRule.rank(
+            documents: [unread],
+            query: RecallQuery(keywords: ["组长"], emotion: .calm))
+
+        XCTAssertEqual(hits.first?.document.id, unread.id)
+        XCTAssertNil(hits.first?.ranks[.emotion], "没情绪却在情绪那一路上榜 = 被兜成了 calm")
     }
 
     func test_向量那一路由外部注入() {

@@ -102,8 +102,14 @@ final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding, Recall
         · 推断情绪时使用“好像”“似乎”“也许”等留有余地的表达，但不要套用固定句式。
         · 可以轻轻触及情绪质感，不复述日记中的私密细节。
         · 不使用“今天”“今晚”“刚刚”等很快过期的时间词。
+        · **不要给你提到的那件事安上时间跨度** —— 不说“X 那几天”“X 那阵子”“X 那段日子”。
+          你只看到它被写进日记的那一天，**并不知道它持续了多久**，那样说是在声称你没有的信息。
+          范围词用来描述**对方的状态**可以（“这几天好像一直很累”），用来描述**某件事**不行。
         · 不出现“连续几天”“检测到”“记录显示”“数据显示”“从日记看”“我注意到”等暴露信息来源或分析过程的表达。
         · 不诊断、不夸大、不保证事情一定会变好，也不使用“只有我懂你”等制造依赖的表达。
+        · **你说的事发生在较早的日子、而那之后还有记录时，不要停在那一天。**
+          让这句话落在「现在」：那件事还压着，而ta也还在往下过日子。
+          只字不提之后发生的事，读起来像你没跟上ta。（之后确实没有记录时，不适用。）
         · 这句话可能持续展示三天；优先选择安静、含蓄、重看不尴尬的说法。
 
         「最近对ta说过的话」里，状态是「此刻仍挂在用户眼前」的那句，用户现在正看着。
@@ -137,8 +143,28 @@ final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding, Recall
         }
         referencedDates 必须是输入里出现过的日期，不要编造。
         """
-    
-    
+
+    //MARK: - 写日记专用的 session
+
+    /// 写日记那一下专用。用户正对着母鸡等，**等待中页面关不掉**（不给取消，见
+    /// `ComposeViewController.closeTapped`），所以这个时限就是出口，必须是**总时限**、而且要短。
+    ///
+    /// `URLSession.shared` 只有**空闲**超时（默认 60 秒）：连续 60 秒一个字节都没收到才算超时，
+    /// 有数据陆续到就重新计时。DeepSeek 拥堵时会先回 200、再不停发空行占着连接（最长 10 分钟），
+    /// 空闲超时永远等不到。`timeoutIntervalForResource` 从发出那一刻算**总时长**，到点抛 `URLError.timedOut`。
+    ///
+    /// **到点不算失败**：日记在问 AI 之前就存好了（先存后分析），到点只是这篇先不带情绪、
+    /// 母鸡说一句本地的「收好了」。所以敢设短 —— 误伤一次的代价只是少一句 AI 回复。
+    ///
+    /// `waitsForConnectivity` 保持默认 false：开了的话没网也要干等满时限，而现在没网是秒失败。
+    ///
+    /// 只给 analyze 用。关怀、补蛋、检索失败的代价各不一样，时限要分别想，别顺手套用。
+    private static let analyzeSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.timeoutIntervalForResource = 8   // 秒。正常 2~5 秒回
+        return URLSession(configuration: config)
+    }()
+
     func analyze(content: String) async throws -> AIAnalysis {
         //组请求
         let url = URL(string: AIConfig.baseURL + "/chat/completions")!
@@ -159,9 +185,9 @@ final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding, Recall
         )
         request.httpBody = try JSONEncoder().encode(body)
         
-        //发请求
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
+        //发请求。用带总时限的 session，见 analyzeSession
+        let (data, response) = try await Self.analyzeSession.data(for: request)
+
         //检查状态码
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw AIError.badStatus
@@ -306,9 +332,12 @@ final class DeepSeekAIService: AIService,DayEggSummarizing, CareDeciding, Recall
     
     
     /// 把一天的几篇日记排成给模型看的样子:时间 + 情绪 + 原文。
+    /// 没被 AI 读过的那篇不带情绪标签 —— 宁可少一条参考，也不编一个。
+    /// 蛋的情绪本来就是这次总结读完原文自己判的，标签只是参考。
     private static func transcript(_ entries: [SlimeItem]) -> String {
-        entries.map {
-            "\(timeFormatter.string(from: $0.createdAt)) [\($0.emotion.rawValue)] \($0.content)"
+        entries.map { entry in
+            let tag = entry.emotion.map { "[\($0.rawValue)] " } ?? ""
+            return "\(timeFormatter.string(from: entry.createdAt)) \(tag)\(entry.content)"
         }.joined(separator: "\n")
     }
     

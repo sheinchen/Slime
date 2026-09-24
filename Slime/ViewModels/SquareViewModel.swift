@@ -21,6 +21,8 @@ final class SquareViewModel {
         let needsHatch: Bool
         /// 删了一篇、蛋正在重孵。这几秒画一颗没表情的绿壳，见 `rehatching`
         let isRehatching: Bool
+        /// 今天按过母鸡、总结还没回来。画一颗空白蛋 +「孵着呢…」，见 `hatchingToday`
+        let isHatching: Bool
         /// 月历里不属于这一页那个月的日子（首行的上月末、末行的下月初）。
         /// 周条里永远是 false —— 周条没有「这一页是哪个月」的概念
         let isOutsideMonth: Bool
@@ -48,9 +50,20 @@ final class SquareViewModel {
     private let repository: PostRepository
     private let eggStore: DayEggStore
     private let eggService: DayEggService
-    // calendar 和 today 都注入，方便测试
+    // calendar 和「现在几点」都注入，方便测试（测试里可以拨表，造一个跨夜）
     private let calendar: Calendar
-    private let today: Date
+    private let now: () -> Date
+
+    /// 「今天」。**不是常量**，只在 `syncToday()` 里往前挪。
+    ///
+    /// 这个 VM 是组合根建的唯一实例，活得跟 App 一样长，而 App 可能在后台挂一整夜不被杀。
+    /// 以前是 `let`、只在创建时算一次，隔夜回来它还停在昨天：
+    /// 真正的今天被当成未来（`isFuture`，点不了），今天写的日记在周条上看不见。
+    ///
+    /// 也不做成每次现算的计算属性：一次 `rebuildWeeks()` 里要读它好几十遍，
+    /// 恰好跨过零点的话，前半截和后半截会对「今天是哪天」各执一词。
+    /// 存一份、在明确的时机统一挪，一次重建里它就只有一个值。
+    private var today: Date
 
     // MARK: - 状态
 
@@ -62,6 +75,12 @@ final class SquareViewModel {
     /// （断网、App 被杀都不会留下过时的蛋），但这几秒要是照实画成「还在孵」，
     /// 蛋会闪没了再冒出来。所以先画一颗没表情的绿壳顶着，新蛋回来再揭晓。
     private var rehatching: Set<Date> = []
+
+    /// 今天那颗正在孵：按过母鸡、总结还没回来。跟 `rehatching` 同一个思路 —— **只影响怎么画**。
+    /// 蛋没存之前今天照实算还「欠」着，等的时候切去别的日子再回来，鸟巢会把母鸡画回来、
+    /// 还能再按一次。所以这段时间今天画成空白蛋 +「孵着呢…」，也不许再按。
+    /// 弱网下这段可能很长（孵蛋没加总时限，拥堵时 DeepSeek 最长排队十分钟），所以得是个真状态。
+    private var hatchingToday = false
 
     /// 从「最早一篇日记那周」到「本周」，升序。
     /// **最后一个永远是本周** —— 翻不到未来靠的就是这个数组到此为止，没有额外的边界判断。
@@ -91,7 +110,7 @@ final class SquareViewModel {
     }
 
     var canHatchToday: Bool {
-        needsHatch(today)
+        needsHatch(today) && !hatchingToday
     }
 
     /// 判定规则和 DayEggService 共用 EggDebt 那一份，避免两边漂移。
@@ -105,14 +124,15 @@ final class SquareViewModel {
          eggStore: DayEggStore? = nil,
          eggService: DayEggService? = nil,
          calendar: Calendar = .current,
-         today: Date = Date()) {
+         now: @escaping () -> Date = { Date() }) {
         self.repository = repository ?? CoreDataPostRepository()
         self.eggStore = eggStore ?? CoreDataDayEggStore()
         self.eggService = eggService ?? DayEggService()
         var cal = calendar
         cal.firstWeekday = 1
         self.calendar = cal
-        self.today = cal.startOfDay(for: today)
+        self.now = now
+        self.today = cal.startOfDay(for: now())
         self.selectedDate = self.today
     }
 
@@ -121,7 +141,7 @@ final class SquareViewModel {
     func loadPosts() {
         items = repository.fetchAll().map { post in
             SlimeItem(id: post.id, content: post.content, createdAt: post.createdAt,
-                      emotion: SlimeEmotion(rawValue: post.emotion) ?? .calm,
+                      emotion: post.slimeEmotion,
                       reply: post.reply, dayKey: post.dayKey)
         }
 
@@ -142,10 +162,30 @@ final class SquareViewModel {
         rebuildWeeks()
     }
     
+    /// 进页时调：先对一下日子，再把选中日放回今天。
     func resetToToday() {
+        syncToday()
         guard selectedDate != today else { return }
         selectedDate = today
         rebuildWeeks()
+    }
+
+    /// 对一下「今天」还是不是今天。换了一天就把今天挪过去，选中日也跟着回到新的今天。
+    ///
+    /// 选中日为什么也要动：它多半就停在旧的今天上。不动的话，用户隔夜回来看到的
+    /// 是昨天的日记 —— 跟 `viewWillAppear` 里「每次进页都当成重新打开」是同一个理由。
+    /// 跨了一天，就该当成重新打开。
+    ///
+    /// - Returns: 真的换了一天。调用方据此决定要不要把周条带回本周 ——
+    ///   同一天里的重读（补完蛋、关怀落库）不该动周条和选中日。
+    @discardableResult
+    func syncToday() -> Bool {
+        let current = calendar.startOfDay(for: now())
+        guard current != today else { return false }
+        today = current
+        selectedDate = current
+        rebuildWeeks()
+        return true
     }
 
     /// 删一篇日记，并让那天的蛋作废。同步 —— 返回时蛋已经没了。
@@ -253,6 +293,7 @@ final class SquareViewModel {
             isFuture: date > today,
             needsHatch: needsHatch(date),
             isRehatching: rehatching.contains(date),
+            isHatching: date == today && hatchingToday,
             isOutsideMonth: month.map { !calendar.isDate(date, equalTo: $0, toGranularity: .month) } ?? false)
     }
     
@@ -336,8 +377,14 @@ final class SquareViewModel {
 
     @discardableResult
     func finishTodaySummary() async throws -> DayEggSummary {
-        let summary = try await eggService.finishToday()
-        loadPosts()
-        return summary
+        // 标记必须在第一个 await 之前：从这一刻起，任何一次 refresh 都该把今天画成「孵着呢」
+        hatchingToday = true
+        rebuildWeeks()
+        // 成败都一样处理：撤掉标记重读一遍。成功读到新蛋，失败读回「还欠着」（loadPosts 里会 rebuildWeeks）
+        defer {
+            hatchingToday = false
+            loadPosts()
+        }
+        return try await eggService.finishToday()
     }
 }

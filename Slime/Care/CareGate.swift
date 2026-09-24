@@ -107,7 +107,7 @@ final class CareGate {
         }
 
         // 窗口含今天。今天的蛋只在用户按住母鸡时才会出现 —— 那个动作本身就是「收束今天」，
-        // 不是半成品。而评估只在 sceneDidBecomeActive 时跑，所以在 App 里连续写日记、孵蛋，
+        // 不是半成品。而评估只在回到前台（sceneWillEnterForeground）时跑，所以在 App 里连续写日记、孵蛋，
         // 关怀不会当场冒出来，要切走再回来才会评估。
         let tomorrow = calendar.date(byAdding: .day, value: 1, to: today) ?? today
         return CareGateRule.decide(

@@ -11,7 +11,8 @@ nonisolated struct RecallDocument: Hashable {
     let id: UUID
     let date: Date
     let text: String
-    let emotion: SlimeEmotion
+    /// nil = 写的时候 AI 没读上。情绪那一路给不了它分，关键词和向量照常。
+    let emotion: SlimeEmotion?
 }
 
 nonisolated struct RecallQuery {
@@ -105,9 +106,10 @@ nonisolated enum RecallRule {
     
     private static func emotionScore(_ document: RecallDocument,
                                          _ queryEmotion: SlimeEmotion?) -> Double {
-            guard let queryEmotion else { return 0 }
-            if document.emotion == queryEmotion { return 2 }
-            return isNegative(document.emotion) == isNegative(queryEmotion) ? 1 : 0
+            // 那篇没被 AI 读过就没有情绪 —— 给 0 分，而不是猜一个再比
+            guard let queryEmotion, let documentEmotion = document.emotion else { return 0 }
+            if documentEmotion == queryEmotion { return 2 }
+            return isNegative(documentEmotion) == isNegative(queryEmotion) ? 1 : 0
         }
     
     private static func isNegative(_ emotion: SlimeEmotion) -> Bool {

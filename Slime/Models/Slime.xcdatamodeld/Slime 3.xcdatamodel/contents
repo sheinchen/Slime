@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<model type="com.apple.IDECoreDataModeler.DataModel" documentVersion="1.0" lastSavedToolsVersion="24512" systemVersion="24G419" minimumToolsVersion="Automatic" sourceLanguage="Swift" userDefinedModelVersionIdentifier="">
+    <entity name="CareCheck" representedClassName="CareCheck" syncable="YES">
+        <attribute name="aiCalled" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="aiRaw" optional="YES" attributeType="String"/>
+        <attribute name="checkedAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="dropReason" optional="YES" attributeType="String"/>
+        <attribute name="finalShown" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="gatePassed" attributeType="Boolean" usesScalarValueType="YES"/>
+        <attribute name="gateReason" optional="YES" attributeType="String"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="latencyMs" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+    </entity>
+    <entity name="CareMessage" representedClassName="CareMessage" syncable="YES">
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="firstSeenAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="referencedDates" optional="YES" attributeType="String"/>
+        <attribute name="retiredAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="ruleId" attributeType="String"/>
+        <attribute name="status" attributeType="String" defaultValueString="pending"/>
+        <attribute name="text" attributeType="String"/>
+    </entity>
+    <entity name="ChatMessage" representedClassName="ChatMessage" syncable="YES">
+        <attribute name="content" attributeType="String"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="role" attributeType="String"/>
+        <relationship name="session" optional="YES" maxCount="1" deletionRule="Nullify" destinationEntity="ChatSession" inverseName="messages" inverseEntity="ChatSession"/>
+    </entity>
+    <entity name="ChatSession" representedClassName="ChatSession" syncable="YES">
+        <attribute name="careMessageId" optional="YES" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="title" optional="YES" attributeType="String"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <relationship name="messages" optional="YES" toMany="YES" deletionRule="Cascade" destinationEntity="ChatMessage" inverseName="session" inverseEntity="ChatMessage"/>
+    </entity>
+    <entity name="DayEgg" representedClassName="DayEgg" syncable="YES">
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="date" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="emotion" attributeType="String"/>
+        <attribute name="text" attributeType="String"/>
+    </entity>
+    <entity name="Post" representedClassName="Post" syncable="YES">
+        <attribute name="content" attributeType="String"/>
+        <attribute name="createdAt" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="dayKey" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="embedding" optional="YES" attributeType="Binary" allowsExternalBinaryDataStorage="YES"/>
+        <attribute name="emotion" optional="YES" attributeType="String"/>
+        <attribute name="id" attributeType="UUID" usesScalarValueType="NO"/>
+        <attribute name="reply" optional="YES" attributeType="String"/>
+    </entity>
+</model>

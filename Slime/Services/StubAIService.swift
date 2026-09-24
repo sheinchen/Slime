@@ -40,37 +40,50 @@ final class StubAIService: AIService,
 
     private let careVerdict: CareVerdict
     private let latency: UInt64
+    private let offline: Bool
 
     /// - Parameter careVerdict: 传 nil 就看启动参数 `-StubQuiet`，默认 `.say`。
     /// - Parameter latencyMs: 假装的网络耗时。**不要调成 0** ——
     ///   孵蛋动画、发送按钮的 loading 态都靠这段等待才看得见，
     ///   瞬间返回反而会让 UI 的中间状态测不到。
-    init(careVerdict: CareVerdict? = nil, latencyMs: UInt64 = 300) {
+    ///   传 nil 就看启动参数 `-StubSlow`：有就拖 10 秒（弱网），没有 0.3 秒。
+    ///   10 秒是为了能看清、也来得及操作等待中的样子：「孵着呢…」「咕，在听呢」、
+    ///   孵蛋等的时候切去别的日子 / 去首页写一篇。
+    /// - Parameter offline: 传 nil 就看启动参数 `-StubOffline`。为 true 时每一路都假装没网，
+    ///   验「没网也能写」：日记照存、情绪留空、母鸡说本地那句。
+    init(careVerdict: CareVerdict? = nil, latencyMs: UInt64? = nil, offline: Bool? = nil) {
         self.careVerdict = careVerdict
             ?? (CommandLine.arguments.contains("-StubQuiet") ? .quiet : .say)
-        self.latency = latencyMs * 1_000_000
+        let ms = latencyMs ?? (CommandLine.arguments.contains("-StubSlow") ? 10_000 : 300)
+        self.latency = ms * 1_000_000
+        self.offline = offline ?? CommandLine.arguments.contains("-StubOffline")
     }
 
-    private func pretendNetwork() async {
+    /// 假装走了一趟网络。没网的时候跟真的一样：等完了抛 `notConnectedToInternet`。
+    private func pretendNetwork() async throws {
         try? await Task.sleep(nanoseconds: latency)
+        if offline { throw URLError(.notConnectedToInternet) }
     }
 
     // MARK: - AIService
 
     func analyze(content: String) async throws -> AIAnalysis {
-        await pretendNetwork()
+        try await pretendNetwork()
         return AIAnalysis(emotion: Self.guessEmotion(content), reply: "咕咕~ 我听见啦。（桩）")
     }
 
     func chat(messages: [AIChatMessage]) async throws -> String {
-        await pretendNetwork()
+        try await pretendNetwork()
         return Self.reply(to: messages)
     }
 
     func chatstream(messages: [AIChatMessage]) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
-                await pretendNetwork()
+                do { try await pretendNetwork() } catch {
+                    continuation.finish(throwing: error)
+                    return
+                }
                 // 一个字一个字吐，打字机效果和真流式一样能验
                 for character in Self.reply(to: messages) {
                     try? await Task.sleep(nanoseconds: 30_000_000)
@@ -84,7 +97,7 @@ final class StubAIService: AIService,
     // MARK: - DayEggSummarizing
 
     func summarizeDay(_ entries: [SlimeItem]) async throws -> DayEggSummary {
-        await pretendNetwork()
+        try await pretendNetwork()
         guard !entries.isEmpty else { throw AIError.emptyContent }
 
         // 把每篇开头几个字串起来。这样删掉一篇再重孵，总结会跟着变 ——
@@ -97,7 +110,7 @@ final class StubAIService: AIService,
     // MARK: - CareDeciding
 
     func decideCare(window: MoodWindow, recentlySaid: [PastCare]) async throws -> CareDecision {
-        await pretendNetwork()
+        try await pretendNetwork()
 
         guard careVerdict == .say else {
             return CareDecision(shouldShow: false,
@@ -127,7 +140,7 @@ final class StubAIService: AIService,
 
     func extractRecallIntent(message: String,
                              recentTurns: [AIChatMessage]) async throws -> RecallIntent {
-        await pretendNetwork()
+        try await pretendNetwork()
         // 固定放行。桩不替产品判断该不该翻旧账 —— 那是语义，正是真 AI 的活。
         return RecallIntent(shouldRecall: true,
                             keywords: Self.crudeKeywords(message),
@@ -140,7 +153,7 @@ final class StubAIService: AIService,
     func rerank(message: String,
                 recentTurns: [AIChatMessage],
                 candidates: [RecallHit]) async throws -> RecallSelection {
-        await pretendNetwork()
+        try await pretendNetwork()
         // 直接取融合后的前 3 条 —— **这正是真实现被明令禁止的降级行为**。
         // 线上重排失败必须 fail closed（宁可不提），否则一出故障就变成「为了回忆而回忆」。
         // 桩可以这么干，是因为它的任务是把候选送到下游、验证注入链路通不通，
@@ -173,11 +186,15 @@ final class StubAIService: AIService,
     }
 
     /// 当天出现最多的情绪；平票时取最后一篇的 —— 一天怎么收尾更能代表这天。
+    ///
+    /// 没被 AI 读过的那篇（emotion 为 nil）就按原文猜一个参与计票：真 AI 总结一天时读的也是原文。
+    /// 这是**桩在模仿模型读原文**，猜出来的只进这颗蛋的桩结果，**不回写到那篇日记上**。
     private static func dominant(_ entries: [SlimeItem]) -> SlimeEmotion {
+        let emotions = entries.map { $0.emotion ?? guessEmotion($0.content) }
         var counts: [SlimeEmotion: Int] = [:]
-        for entry in entries { counts[entry.emotion, default: 0] += 1 }
+        for emotion in emotions { counts[emotion, default: 0] += 1 }
         guard let top = counts.values.max() else { return .calm }
-        if let last = entries.last, counts[last.emotion] == top { return last.emotion }
+        if let last = emotions.last, counts[last] == top { return last }
         return counts.first { $0.value == top }?.key ?? .calm
     }
 

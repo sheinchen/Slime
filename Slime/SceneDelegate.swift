@@ -15,9 +15,25 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private var eggService: DayEggService?
     private var recallIndex: RecallIndexService?
     private var careEngine: CareEngine?
-    private var careChecks: CareCheckStore?
     private weak var rootVC: RootTabBarController?
-    
+
+    /// 正在跑的那一轮「打开 App」流程（补蛋 → 关怀）。nil = 没在跑。
+    ///
+    /// 这段流程一轮可能要跑很久（补蛋、关怀都要调 AI），这期间用户完全可能再回来一次。
+    /// 以前每次都起一个新 Task，两轮会**交错着跑**：
+    /// @MainActor 只保证同一时刻只有一段代码在执行，每个 await 都是让出点，别的 Task 能插进来。
+    ///
+    /// 交错的后果（09-24 在模拟器上复现过：那时入口还在 sceneDidBecomeActive，
+    /// -StubSlow 下拉一次通知中心就触发了第二轮）：
+    /// · 闸门条件①的锚点 lastCheckedAt 要等 AI 回来才写，第二轮看到的还是旧锚点 →
+    ///   两次 AI 调用、两条关怀，第一条刚落库就被第二条顶掉 —— debug 页里多出一次假替换
+    /// · 第二轮的 hatchAllPending 看到那几天正在孵会直接跳过、秒返回 →
+    ///   在第一轮还没孵完时就去跑关怀，违反「先补完蛋再跑关怀」
+    ///
+    /// 所以防重入挂在**整段流程**上，不挂在 CareEngine 里：要保护的是「顺序」，
+    /// 顺序归流程的主人管。只在 CareEngine 里挡，挡得住两次 AI，挡不住第二条。
+    private var activation: Task<Void, Never>?
+
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         // scene 是一个 UIWindowScene(带屏幕的场景),转型失败就不往下走
@@ -40,8 +56,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // 于是「测关怀」和「测检索」可以互不干扰：
         //   -StubCare  关怀决策固定（配 -StubQuiet 翻成固定不说）
         //   -StubEgg   孵蛋总结固定，省掉等待和 API 调用
-        //   -StubChat  聊天回复固定
+        //   -StubChat  聊天回复固定（写日记的 analyze 也走这一路）
         //   -StubAI    全部打桩，**包括检索那两路** —— 只用来验管道，验不了检索质量
+        //   -StubOffline  打了桩的那几路全部假装没网。验「没网也能写」用 -StubChat -StubOffline；
+        //                 配 -StubAI 就是整个 App 断网
+        //   -StubSlow     打了桩的那几路每次都拖 10 秒（弱网），看等待中的样子：「孵着呢…」「咕，在听呢」
         #if DEBUG
         let stubAI = StubAIService()
         let args = CommandLine.arguments
@@ -178,9 +197,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         self.window = window
         self.eggService = eggService
         self.careEngine = careEngine
-        self.careChecks = careChecks
         self.rootVC = rootVC
-        
+
+        // 系统在零点（以及运营商校时、夏令时切换这类时间突变）时发这个通知，
+        // 在主线程上发。用 selector 版本：闭包版本的回调不带主线程隔离，
+        // 在里面碰 rootVC 编译器会拦。SceneDelegate 跟 App 同寿，不用手动移除观察者。
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(significantTimeChange),
+                                               name: UIApplication.significantTimeChangeNotification,
+                                               object: nil)
+
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
@@ -191,7 +217,56 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     }
 
     func sceneDidBecomeActive(_ scene: UIScene) {
-        Task { await onAppActive() }
+        // 故意什么都不放。「打开 App」的流程在 sceneWillEnterForeground 里，原因见那边。
+    }
+
+    /// 「用户回到 App」的唯一入口：补蛋 → 关怀。
+    ///
+    /// 为什么是这里、不是 sceneDidBecomeActive（09-24 模拟器实测）：
+    ///
+    ///   | 操作               | willEnterForeground | didBecomeActive |
+    ///   | 冷启动             | ✅                  | ✅              |
+    ///   | 下拉通知中心再收起 |                     | ✅              |
+    ///   | 回主屏再点回来     | ✅                  | ✅              |
+    ///
+    /// 两个维度：前台/后台 = 用户在不在这个 App 里；活跃/非活跃 = 此刻摸不摸得到。
+    /// 拉通知中心时用户没离开，只是暂时摸不到 —— 那不是「回来了」。
+    /// 放在 didBecomeActive 的话，每拉一次通知中心就跑一遍闸门、往 CareCheck 写一条
+    /// 「没有新蛋」，debug 页的统计被这种噪声撑大。冷启动这里也会走，不用另外补。
+    func sceneWillEnterForeground(_ scene: UIScene) {
+        // ① 先让各页对一下「今天」—— 同步、立刻，不等下面那段流程。
+        //    隔夜回来的第一件事就是补昨天的蛋（要调 AI），弱网下可能等好几分钟，
+        //    等它跑完再广播的话，这期间首页标题一直挂着昨天、广场的今天也还是昨天。
+        //    冷启动时各页的 view 多半还没加载，广播会跳过它们，无害。
+        rootVC?.broadcastDataChange()
+
+        // ② 补蛋 → 关怀。
+        //
+        // 换到这里只是让它**少触发**；防重入的 guard 仍然要，它保证的是**不重叠** ——
+        // 补蛋正等着 AI 时切出去回条消息再回来，照样会在上一轮没跑完时再进来。
+        //
+        // 上一轮还没跑完就不起新的，直接跳过 —— 不用排队再跑一遍：
+        // 那一轮每一步都是现查库，读到的就是最新的数据，事情它会做完。
+        // 代价：补蛋卡在拥堵的 DeepSeek 上时，这期间的回前台都被跳过，关怀要等它跑完才评估。
+        // 这跟「孵蛋不加总时限」那次接受的代价是同一个，不新增。
+        guard activation == nil else { return }
+
+        // 先赋值、后清空，顺序是有保证的：这个 Task 继承主线程隔离，
+        // 而我们此刻正占着主线程 —— 它的第一行最早也要等这个函数 return 才能跑。
+        // 所以不会出现「Task 先跑完清了空、这里才赋值」，activation 卡在非 nil、之后全被挡掉。
+        activation = Task {
+            await onAppActive()
+            activation = nil
+        }
+    }
+
+    /// 开着 App 跨过零点。
+    ///
+    /// 进前台那一下管的是「隔夜回来」；这个管的是「App 一直开在眼前、日子换了」。
+    /// 只让各页对一下「今天」，**不跑补蛋和关怀** —— 规格里那条流程只认「回到 App」一个事件，
+    /// 零点那一刻用户没做任何事，昨天的蛋留到下次回前台再补。
+    @objc private func significantTimeChange() {
+        rootVC?.broadcastDataChange()
     }
     
     private func onAppActive() async {
@@ -205,20 +280,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // 这个 Task 跑完时 viewDidAppear 早就过去了，不广播卡片就不会出现。
         rootVC?.broadcastDataChange()
 
-        #if DEBUG
-        if let c = careChecks?.recent(limit: 1).first {
-            print("""
-
-            ========== 🔍 关怀检查 ==========
-            闸门: \(c.gatePassed ? "过" : "挡") \(c.gateReason ?? "")
-            调AI: \(c.aiCalled)   耗时: \(c.latencyMs)ms
-            展示: \(c.finalShown)  \(c.dropReason ?? "")
-            原始: \(c.aiRaw ?? "-")
-            ================================
-
-            """)
-        }
-        #endif
         
         if let recallIndex {
             Task { await recallIndex.backfill() }
@@ -229,11 +290,6 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func sceneWillResignActive(_ scene: UIScene) {
         // Called when the scene will move from an active state to an inactive state.
         // This may occur due to temporary interruptions (ex. an incoming phone call).
-    }
-
-    func sceneWillEnterForeground(_ scene: UIScene) {
-        // Called as the scene transitions from the background to the foreground.
-        // Use this method to undo the changes made on entering the background.
     }
 
     func sceneDidEnterBackground(_ scene: UIScene) {

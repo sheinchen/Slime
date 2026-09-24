@@ -251,7 +251,10 @@ final class ChatViewModel {
         }.prefix(3)
         
         let postLines = window.map { post in
-            "- [\(post.emotion)] \(post.content.prefix(60))"
+            // 没被 AI 读过的那篇不带标签。post.emotion 是可选的 ——
+            // 直接插值编译器只报警告，运行起来会变成 [Optional("sad")] 塞进 prompt
+            let tag = post.emotion.map { "[\($0)] " } ?? ""
+            return "- \(tag)\(post.content.prefix(60))"
         }.joined(separator: "\n")
         
         return """

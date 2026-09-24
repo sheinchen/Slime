@@ -2,9 +2,10 @@
 //  ComposeViewController.swift
 //  Slime
 //
-//  生成页:写一句碎碎念 → 点"生成" → 一只史莱姆孵化揭晓 → 走进广场。
-//  两种模式:输入模式(写字) / 孵化模式(播揭晓动画)。VC 只做编排,
-//  存数据交给 ViewModel、绘制与动画交给 SlimeView、转场交给导航控制器。
+//  写日记页:写一句碎碎念 → 点「收好」→ 母鸡上台,点头,说一句 → 收起。
+//  两种模式:输入模式(写字) / 记录模式(母鸡在台上)。VC 只做编排,
+//  存数据和「她说什么」交给 ViewModel、动画交给 RiveHenView。
+//  点「收好」那一刻日记就存了(先存后分析),所以这一页没有失败路径。
 //
 
 import UIKit
@@ -137,6 +138,16 @@ final class ComposeViewController: UIViewController {
         return label
     }()
 
+    /// 等她回话时点背景的回应。**不取消、不关页**,只让人知道她还在 ——
+    /// 完全没反应的话,看起来就像卡死了。位置和 replyLabel 重叠:她一开口就撤掉。
+    private let listeningHint: UILabel = {
+        let label = UILabel()
+        label.attributedText = AppFont.attributed("咕，在听呢", size: 15, color: Sky.ink(0.4))
+        label.textAlignment = .center
+        label.alpha = 0
+        return label
+    }()
+
     // MARK: - 生命周期
 
     override func viewDidLoad() {
@@ -197,6 +208,7 @@ final class ComposeViewController: UIViewController {
         view.addSubview(generateButton)
         if let henView { view.addSubview(henView) }
         view.addSubview(replyLabel)
+        view.addSubview(listeningHint)
 
         dateLabel.attributedText = AppFont.attributed(todayTitle(), size: 15, color: Sky.ink(0.45))
         placeholderLabel.attributedText = AppFont.attributed("今天……", size: 19, color: Sky.ink(0.28))
@@ -252,6 +264,10 @@ final class ComposeViewController: UIViewController {
                 make.leading.trailing.equalToSuperview().inset(32)
             }
         }
+        // 跟她的回复同一个位置 —— 都是「她在说话」
+        listeningHint.snp.makeConstraints { make in
+            make.top.leading.trailing.equalTo(replyLabel)
+        }
 
     }
 
@@ -270,7 +286,13 @@ final class ComposeViewController: UIViewController {
     // MARK: - 交互
 
     @objc private func closeTapped() {
-        guard !isRecording else { return }
+        // 等她回话时不让关,也不给取消 —— 最多等 8 秒(analyzeSession 的总时限),
+        // 到点她自己会说一句收尾。日记在点「收好」时已经存了,等的只是她那句话。
+        // 但点了不能毫无反应,那正是「点了没反应、像卡死了」的感觉。
+        guard !isRecording else {
+            showListeningHint()
+            return
+        }
         textView.resignFirstResponder()
         onClose?()
         dismiss(animated: true)
@@ -291,14 +313,10 @@ final class ComposeViewController: UIViewController {
             // 她至少要在台上待够这么久 —— 秒回的时候闪一下就没了,反而像出错
             let startedAt = DispatchTime.now()
             let minStageNanos: UInt64 = 800_000_000
-            do {
-                let item = try await viewModel.generate(content: text)
-                await waitAtLeast(minStageNanos, since: startedAt)
-                acknowledge(reply: item.reply)
-            } catch {
-                await waitAtLeast(minStageNanos, since: startedAt)
-                handleGenerateFailure(error)
-            }
+            // 不会失败:日记在问 AI 之前就存好了。AI 没读上,她说的是一句本地的「收好了」
+            let line = await viewModel.generate(content: text)
+            await waitAtLeast(minStageNanos, since: startedAt)
+            acknowledge(reply: line)
         }
     }
 
@@ -343,33 +361,24 @@ final class ComposeViewController: UIViewController {
         }
     }
     
-    private func handleGenerateFailure(_ error: Error) {
-        print("记录失败 \(error)")
-
-        isRecording = false
-        pendingReply = nil
-        henView?.pauseRendering()
-        henView?.isHidden = true
-        replyLabel.isHidden = true
-        textView.isHidden = false
-        // 这三行原来漏了 —— enterRecordingMode 把卡片和按钮藏起来了,
-        // 失败时不恢复,用户会对着一片空白,连原文都看不见
-        cardShadow.isHidden = false
-        generateButton.isHidden = false
-        placeholderLabel.isHidden = !(textView.text ?? "").isEmpty
-        generateButton.isEnabled = true
-
-        let alert = UIAlertController(
-            title: "分析失败",
-            message: "嗷 网络好像出了点问题",
-            preferredStyle: .alert)
-        alert.addAction(UIAlertAction(title: "收到", style: .cancel))
-        present(alert, animated: true)
+    /// 「咕，在听呢」:淡进来,停一会儿自己淡掉。连点几下就从头再来一遍。
+    private func showListeningHint() {
+        guard !didDeliverReply else { return }      // 她已经在说了,不用再提示
+        listeningHint.layer.removeAllAnimations()
+        listeningHint.alpha = 0
+        UIView.animate(withDuration: 0.2) {
+            self.listeningHint.alpha = 1
+        } completion: { finished in
+            guard finished else { return }          // 被下一次点击或她开口打断了
+            UIView.animate(withDuration: 0.4, delay: 1.4) { self.listeningHint.alpha = 0 }
+        }
     }
-    
 
-    // 淡入一行 AI 回复(在史莱姆下面)
+    // 淡入一行 AI 回复(在母鸡下面)
     private func showReply(_ reply: String?) {
+        // 她开口了,「在听呢」让位
+        listeningHint.layer.removeAllAnimations()
+        listeningHint.alpha = 0
         guard let reply, !reply.isEmpty else { return }
         replyLabel.text = reply
         replyLabel.alpha = 0

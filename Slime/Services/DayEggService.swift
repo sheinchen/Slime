@@ -61,10 +61,10 @@ final class DayEggService {
 
     /// 把窗口内所有欠蛋的**过去**天全部补上。今天不自动补 —— 今天要用户自己按母鸡。
     ///
-    /// 正常情况下最多只欠一天：写日记要有网，没网就写不进新债，债务的产生和偿还
-    /// 被同一个条件卡住。所以这个循环几乎总是跑 0 或 1 次，成本可以忽略。
-    /// 它存在是为了自愈那些异常累积的洞 —— 孵蛋失败、DayEgg 之前的历史数据、
-    /// 用户只在首页写日记从不逛广场。
+    /// 没网也能写日记（先存后分析），所以断网几天就会攒下几天的债 ——
+    /// 以前「写日记要有网、最多只欠一天」的前提已经不成立了。这个循环本来就是按天补的，
+    /// 攒多少天都一样，只是有网之后第一次打开会多等几次总结。
+    /// 其余的洞也靠它自愈：孵蛋失败、DayEgg 之前的历史数据、用户只在首页写日记从不逛广场。
     /// - Returns: 实际补成功的颗数。
     @discardableResult
     func hatchAllPending(within days: Int = 14, now: Date = Date()) async -> Int {
@@ -97,6 +97,9 @@ final class DayEggService {
     /// 按到一半松手、去写了一篇（或删了一篇）再回来按，手上那份就过时了 ——
     /// 拿它落库的话，蛋会漏掉新写的那篇；而且蛋比那篇晚，EggDebt 判不欠，永远补不回来。
     /// 所以每次都比一下「基于哪几篇」，对不上就作废重发。重复调用仍然安全。
+    ///
+    /// **失败的预取不留着**：按到一半时没网 → 松手 → 网好了再按满，
+    /// 不能直接拿到这个旧的失败、白白「没孵出来」一次。
     func prefetchToday(now: Date = Date()) {
         let today = calendar.startOfDay(for: now)
         guard let entries = grouped()[today], !entries.isEmpty,
@@ -110,7 +113,16 @@ final class DayEggService {
         guard todayTask?.basis != basis else { return }   // 已经在路上，而且日记没变过
 
         dropTodayTask()
-        todayTask = (basis, Task { try await summarizer.summarizeDay(entries) })
+        let task = Task {
+            do {
+                return try await summarizer.summarizeDay(entries)
+            } catch {
+                // basis 对得上才清 —— 被 dropTodayTask 换掉的旧请求也会走到这儿（取消），别误清新的那份
+                if todayTask?.basis == basis { todayTask = nil }
+                throw error
+            }
+        }
+        todayTask = (basis, task)
     }
 
     /// 等 prefetch 的结果并落库。没 prefetch 过会就地补发一次，所以单独调它也是对的。
@@ -118,10 +130,19 @@ final class DayEggService {
     @discardableResult
     func finishToday(now: Date = Date()) async throws -> DayEggSummary {
         prefetchToday(now: now)
-        guard let task = todayTask?.task else { throw EggError.nothingToSummarize }
+        guard let current = todayTask else { throw EggError.nothingToSummarize }
         defer { todayTask = nil }              // 无论成败都清掉，失败后能重按
-        let summary = try await task.value
-        eggs.save(text: summary.text, emotion: summary.emotion, for: calendar.startOfDay(for: now))
+        let summary = try await current.task.value
+
+        // 等总结的这段时间，日记可能变了：切去首页写了一篇、在广场删了一篇。
+        // 跟预取那条是同一个坑，只是发生在「等」的中途 —— 拿过时的总结落库，
+        // 蛋会漏掉新写的 / 带着删掉的内容，而且蛋比日记新，EggDebt 判不欠，再也补不回来。
+        // 所以落库前再对一次「基于哪几篇」，对不上就按现在的日记重孵（重新走一遍本函数）。
+        let today = calendar.startOfDay(for: now)
+        guard grouped()[today]?.map(\.id) == current.basis else {
+            return try await finishToday(now: now)
+        }
+        eggs.save(text: summary.text, emotion: summary.emotion, for: today)
         return summary
     }
 
@@ -182,7 +203,7 @@ final class DayEggService {
     private func grouped() -> [Date: [SlimeItem]] {
         let items = posts.fetchAll().map {
             SlimeItem(id: $0.id, content: $0.content, createdAt: $0.createdAt,
-                      emotion: SlimeEmotion(rawValue: $0.emotion) ?? .calm,
+                      emotion: $0.slimeEmotion,
                       reply: $0.reply, dayKey: $0.dayKey)
         }
         var byDay = Dictionary(grouping: items) {

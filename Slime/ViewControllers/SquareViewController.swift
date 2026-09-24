@@ -122,21 +122,24 @@ final class SquareViewController: UIViewController {
         nestStage.onDidLay = { [weak self] in
             guard let self else { return }
             Task {
+                let hatched: Bool
                 do {
-                    let summary = try await self.viewModel.finishTodaySummary()
-                    self.nestStage.revealEgg(to: summary.emotion)
-                    self.nestStage.setCaption(summary.text)
-                    // 只重画周条和月历上的蛋，不走 refresh —— 鸟巢正在演揭晓，
-                    // refresh 会重新 configure 鸟巢把它打断。
-                    // 月历也要刷：展开着月历时母鸡照样按得到
-                    self.weekStrip.configure(weeks: self.viewModel.weeks, jumpTo: nil)
-                    self.monthGrid.configure(months: self.viewModel.months, jumpTo: nil)
+                    try await self.viewModel.finishTodaySummary()
+                    hatched = true
                 } catch {
-                    self.refresh()
-                    self.nestStage.setCaption("哎呀没有孵出来！再试一次！")
+                    hatched = false
+                }
+                // 不直接往鸟巢上画结果：等的时候人可能去看了别的日子、切走又切回来，
+                // 鸟巢现在摆的未必是今天。交给 refresh —— 鸟巢按当前选中的那天自己决定：
+                // 还是今天、台上还是那颗空白蛋 → 原地揭晓；别的日子 → 照常摆那天。
+                // （以前怕 refresh 打断揭晓，现在 configure 认得出「原地揭晓」，不会打断。）
+                self.refresh()
+                // 失败的话，只在今天、而且还能再按的时候说一句 —— 别挂到别的日子底下。
+                // 不说「再试一次」：没网时马上再按只会再失败一次
+                if !hatched, self.viewModel.selectedDay.isToday, self.viewModel.canHatchToday {
+                    self.nestStage.setCaption("咕…没孵出来，等会儿再按我试试")
                 }
             }
-            
         }
     }
     
@@ -342,10 +345,16 @@ final class SquareViewController: UIViewController {
     /// 上次翻到八月、选中十六号的样子会一直挂着 ——
     /// 写完日记切回来看到的是那天的空列表，像是没存上。
     ///
-    /// 这是**唯一**把周条挪回本周的地方。
+    /// 把周条挪回本周的只有两处：这里，和 `dataDidChange` 里发现跨了一天的时候。
     override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         viewModel.resetToToday()
+        reopen()
+    }
+
+    /// 「重新打开」这一页的样子：月历收起、重读、周条回本周、卡片从第一篇叠起。
+    /// 调用前选中日要已经放回今天（`resetToToday` / `syncToday` 都会做）。
+    private func reopen() {
         setMonthExpanded(false, animated: false)
         viewModel.loadPosts()
         refresh(jumpTo: viewModel.currentWeekIndex, showFirstCard: true)
@@ -441,7 +450,18 @@ extension SquareViewController: RootPage {
         // 在这儿再刷一次只是白跑一遍 fetchAll。
     }
     
+    /// 先对一下日子。
+    ///
+    /// 从后台回来**不走 viewWillAppear**（停在这一页进后台、再回来，页面一直是「显示着」的），
+    /// 所以隔夜回来、或者开着 App 跨过零点，只能在这儿接住 —— 当成重新打开。
+    ///
+    /// 同一天里的重读（补完蛋、关怀落库）照旧：不动选中日、不动周条、卡片不重叠，
+    /// 正看着第三篇被换回第一篇会很烦。
     func dataDidChange() {
+        if viewModel.syncToday() {
+            reopen()
+            return
+        }
         viewModel.loadPosts()
         refresh()
     }

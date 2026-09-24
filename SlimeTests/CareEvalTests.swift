@@ -194,10 +194,14 @@ final class CareEvalTests: XCTestCase {
         ═════════════════════════════════════════
         """)
 
-        // 错的那些要能看到它到底说了什么，否则不知道该怎么改 prompt
-        let wrong = outcomes.filter { $0.predicted(of: runs) != $0.c.expected }
+        // 错的那些要能看到它到底说了什么，否则不知道该怎么改 prompt。
+        // **跑子集时全都打** —— 那时候你盯的往往是文案而不是 shouldShow，
+        // 而判对的场景同样可能说出有问题的话(#41 就是:它判对，但文案里把一天说成了几天)。
+        let wrong = onlyIDs.isEmpty
+            ? outcomes.filter { $0.predicted(of: runs) != $0.c.expected }
+            : outcomes
         if !wrong.isEmpty {
-            var detail = "\n────── 判错的场景 ──────"
+            var detail = onlyIDs.isEmpty ? "\n────── 判错的场景 ──────" : "\n────── 全部样本（子集模式）──────"
             for o in wrong {
                 detail += "\n#\(o.c.id) \(o.c.name)（标注该\(o.c.expected ? "说" : "闭嘴")）"
                 detail += "\n   理由: \(o.c.rationale)"
@@ -232,7 +236,11 @@ final class CareEvalTests: XCTestCase {
         static let expiring = ["今天", "今晚", "刚刚"]
 
         /// 范围词:把一天说成好几天。**只在只引用了一天时才可疑**,所以只报不判。
-        static let spans = ["这几天", "那几天", "这阵子", "那阵子", "这段时间", "连着", "一连"]
+        /// ⚠️ 这张表是**实测补出来的**,不是一次想全的。
+        /// 第一版漏了「那段」——「外婆住院那段揪心」明显是同类错误却没被抓到。
+        /// 改 prompt 时再看到新花样就往里加。
+        static let spans = ["这几天", "那几天", "这阵子", "那阵子",
+                            "这段", "那段", "好几天", "好些天", "连着", "一连"]
 
         /// safety normal 时「**尽量**不超过 32 个汉字」—— prompt 写的是「尽量」,所以只报。
         /// **只数汉字**:prompt 说的是「汉字」,把标点和「咕」后面那些符号算进去会虚报。

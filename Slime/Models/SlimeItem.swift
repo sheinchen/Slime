@@ -11,7 +11,8 @@ nonisolated struct SlimeItem: Hashable {
     let id: UUID
     let content: String
     let createdAt: Date
-    let emotion: SlimeEmotion
+    /// nil = AI 还没读过这篇。不是 calm，不是任何一种情绪 —— 下游见到 nil 就少用一条参考，别猜。
+    let emotion: SlimeEmotion?
     let reply: String?
     let dayKey: Date?
 }

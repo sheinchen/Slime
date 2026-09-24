@@ -7,6 +7,18 @@
 
 import CoreData
 
+#if DEBUG
+/// debug 页要看的完整一行 —— 比 `PendingCare` 多了退场时刻和引用日期。
+nonisolated struct CareMessageDebugRow {
+    let text: String
+    let status: String
+    let createdAt: Date
+    let firstSeenAt: Date?
+    let retiredAt: Date?
+    let referencedDates: [Date]
+}
+#endif
+
 protocol CareMessageStore {
     /// 当前挂着的那条。**纯查 status，不做时间判断** ——
     /// 该不该退场是引擎的事：两条退场规则要跨表看蛋，仓库的谓词表达不了。
@@ -24,6 +36,16 @@ protocol CareMessageStore {
     
     /// 最近几条关怀，带「是否仍挂着」。给 AI 判断该保持还是该换。
     func recentCares(limit: Int) -> [PastCare]
+
+#if DEBUG
+    /// 全部关怀,给 debug 页看。**只在 Debug 构建里存在。**
+    ///
+    /// 为什么不让正式路径拿到它:`CareCardView` 的注释里写着 ——
+    /// UI 拿到的 `PendingCare` 故意不带 `referencedDates`,
+    /// 「绝不暴露判断依据」这条铁律是**在数据结构上锁死的**,view 想漏也漏不出来。
+    /// 这个方法把锁打开了,所以它必须留在 `#if DEBUG` 里面。
+    func allForDebug(limit: Int) -> [CareMessageDebugRow]
+#endif
 
     /// 记下这条话**第一次真正被看到**的时刻。
     ///
@@ -83,6 +105,22 @@ final class CoreDataCareMessageStore: CareMessageStore {
          return (try? context.fetch(request))?.first?.retiredAt
      }
     
+#if DEBUG
+    func allForDebug(limit: Int) -> [CareMessageDebugRow] {
+        let request = CareMessage.fetchRequest()
+        request.sortDescriptors = [NSSortDescriptor(keyPath: \CareMessage.createdAt, ascending: false)]
+        request.fetchLimit = limit
+        return ((try? context.fetch(request)) ?? []).map {
+            CareMessageDebugRow(text: $0.text,
+                                status: $0.status,
+                                createdAt: $0.createdAt,
+                                firstSeenAt: $0.firstSeenAt,
+                                retiredAt: $0.retiredAt,
+                                referencedDates: Self.decode($0.referencedDates))
+        }
+    }
+#endif
+
     func markFirstSeen(id: UUID, at date: Date) {
         let request = CareMessage.fetchRequest()
         // 按 id 查，不按 status —— 卡片露面到写这一笔之间隔着几秒，

@@ -21,7 +21,8 @@ extension Post {
     @NSManaged public var content: String
     @NSManaged public var createdAt: Date
     @NSManaged public var id: UUID
-    @NSManaged public var emotion: String
+    /// nil = 这篇 AI 还没读过（写的时候没网、超时、AI 出错）。读的时候走 `slimeEmotion`。
+    @NSManaged public var emotion: String?
     @NSManaged public var reply: String?
     @NSManaged public var dayKey: Date?
     @NSManaged public var embedding: Data?

@@ -62,6 +62,10 @@ class NestStageView: UIView {
     private var eggHasLanded = false
     /// 总结比蛋先回来时先存这儿，等落定再揭晓。
     private var pendingReveal: SlimeEmotion?
+    /// 台上是今天那颗在等总结的空白蛋（刚下出来的，或切回来时照「正在孵」摆的）。
+    /// configure 靠它认出「还是今天、总结回来了」→ 原地揭晓，而不是重摆。
+    private var isAwaitingHatch = false
+    private static let hatchingCaption = "孵着呢…"
 
     // MARK: - 重孵过渡
 
@@ -155,6 +159,17 @@ class NestStageView: UIView {
         let sameDay = day.date == shownDate
         shownDate = day.date
 
+        // 今天，总结回来了（台上还是那颗空白蛋）：不重摆，原地揭晓。
+        // 走 revealEgg 而不是直接 eggView.reveal —— 总结比蛋先回来时，它会等蛋落定再演
+        if sameDay, isAwaitingHatch, !day.isHatching, let egg = day.egg, !day.needsHatch {
+            isAwaitingHatch = false
+            revealEgg(to: egg.emotion)
+            showCaption(egg.text, size: 15, alpha: 0.42, animated: true)
+            return
+        }
+        // 今天还在孵，台上已经是那颗蛋：什么都别动 —— 下蛋演出可能还没演完
+        if sameDay, isAwaitingHatch, day.isHatching { return }
+
         // 同一天，绿壳 → 新蛋（重孵回来了）：不重摆，就地揭晓。
         // 跟今天按母鸡孵出来是同一个动画，读起来是「想好了」
         if sameDay, isShowingRehatch, !day.isRehatching, let egg = day.egg {
@@ -166,7 +181,11 @@ class NestStageView: UIView {
 
         resetStage()
 
-        if day.isRehatching {
+        if day.isHatching {
+            // 等总结的时候切走又切回来：照实画的话蛋还没存、今天还「欠」着，母鸡会被画回来
+            showHatchingEgg()
+            showCaption(Self.hatchingCaption, size: 14, alpha: 0.34)
+        } else if day.isRehatching {
             // 同一天从情绪蛋变过来（刚删了一篇）才淡；切到一个正在重孵的日子就直接摆
             showRehatchEgg(animated: sameDay)
             showCaption("重新孵一下…", size: 14, alpha: 0.34, animated: sameDay)
@@ -225,6 +244,21 @@ class NestStageView: UIView {
         UIView.transition(with: eggView, duration: 0.3, options: .transitionCrossDissolve, animations: apply)
     }
 
+    /// 今天按过母鸡、总结还没回来：一颗米白的空白蛋，跟刚下出来那颗一样，已经落定在台中央。
+    private func showHatchingEgg() {
+        imageView.image = nil
+        imageView.alpha = 0              // 看不见，但还撑着 caption 的位置
+        sizeConstraint.update(offset: Self.eggSide)
+        eggView.blankStyle = .fresh
+        eggView.isBlank = true
+        eggView.emotion = nil
+        eggView.isHidden = false
+        eggHasLanded = true              // 本来就在台上，揭晓不用等落定
+        isHen = false
+        isAwaitingHatch = true
+        setNeedsLayout()
+    }
+
     private func showPlaceholder() {
         imageView.image = nil
         imageView.alpha = 1
@@ -245,6 +279,7 @@ class NestStageView: UIView {
         eggHasLanded = false
         pendingReveal = nil
         isShowingRehatch = false
+        isAwaitingHatch = false
         // 按母鸡下出来的空白蛋是米白的；只有重孵那条路会换成绿壳
         eggView.blankStyle = .fresh
         setNeedsLayout()
@@ -406,6 +441,9 @@ class NestStageView: UIView {
         guard !isLaying else { return }
         isLaying = true
         isHen = false          // 下过了，这一格不能再按
+        isAwaitingHatch = true // 总结回来之前，台上这颗就是「在孵的」
+        // 以前这里一直挂着「今天还在继续」，弱网时空白蛋干等着，看不出在等什么
+        showCaption(Self.hatchingCaption, size: 14, alpha: 0.34, animated: true)
         UIImpactFeedbackGenerator(style: .rigid).impactOccurred()
         
         // 脱身：往下滑一小截，把 eggEmergeInset 那截也吐出来。
@@ -446,7 +484,10 @@ class NestStageView: UIView {
     ///
     /// 总结可能比蛋先回来 —— 那就先存着，等落定再演。
     /// 不存的话揭晓的 pop 动画会跟落定动画抢同一个 transform，蛋会乱跳。
-    func revealEgg(to emotion: SlimeEmotion) {
+    ///
+    /// 私有：以前 VC 在总结回来后直接调它，不管台上现在摆的是哪天 ——
+    /// 等的时候去看了别的日子，那天的蛋就被翻成今天的表情。现在只由 configure 决定揭不揭。
+    private func revealEgg(to emotion: SlimeEmotion) {
         guard eggHasLanded else {
             pendingReveal = emotion
             return
