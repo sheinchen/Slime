@@ -18,6 +18,9 @@
 import XCTest
 @testable import Slime
 
+/// `@MainActor`：里面建的 AI 能力类是主线程隔离的。不标的话测试结束时对象在别的线程上释放，
+/// 析构被调度回主线程、跑在 Task 之外，撞上运行时 bug 直接崩（CLAUDE.md §5，09-25 在这个 eval 上撞到过）。
+@MainActor
 final class RecallIntentEvalTests: XCTestCase {
 
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
@@ -25,9 +28,9 @@ final class RecallIntentEvalTests: XCTestCase {
     func test_提炼检索词eval() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["RUN_EVAL"] == "1",
                           "eval 要真调 API，默认跳过（见文件头注释）")
-        XCTAssertFalse(AIConfig.apiKey.isEmpty, "读不到 Secrets.plist 里的 key")
+        XCTAssertNotNil(EvalClient.devToken, "读不到仓库根目录 Secrets.plist 里的 RelayDevToken（见 EvalClient）")
 
-        let ai = DeepSeekAIService()
+        let ai = RecallIntentExtractor(client: EvalClient.make())
         let embedder = try TextEmbedder()
         let documents = RecallEvalCorpus.documents(now: now)
 
@@ -110,7 +113,7 @@ final class RecallIntentEvalTests: XCTestCase {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["RUN_EVAL"] == "1",
                           "eval 要真调 API，默认跳过")
 
-        let ai = DeepSeekAIService()
+        let ai = RecallIntentExtractor(client: EvalClient.make())
         let smallTalk = ["在吗", "嗯嗯", "好呀", "你叫什么名字呀"]
         var results: [String] = []
 

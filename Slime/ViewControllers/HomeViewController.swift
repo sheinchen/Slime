@@ -44,18 +44,31 @@ final class HomeViewController: UIViewController {
     /// 被打断的那次不算，下次进首页它仍然享受完整的首次待遇。
     private static let firstSeenDelay: TimeInterval = 3
 
-    //注入组合根
-    var makeComposeViewController: ((_ backdrop: UIImage?, _ onClose: @escaping () -> Void) -> UIViewController)?
-    var makeChatViewController: (() -> UIViewController)?
-    var careViewModel: CareViewModel?
-    
-    /// 今天下过蛋没有。日记流程还没接上，先留着驱动文案和提示圈。
-    private var laidToday = false {
-        didSet { updateCopy() }
+    // MARK: - 依赖（组合根通过 init 注入）
+
+    private let viewModel: HomeViewModel
+    /// 写日记页的工厂。参数：背景截图、关掉时的回调
+    private let makeCompose: (_ backdrop: UIImage?, _ onClose: @escaping () -> Void) -> UIViewController
+    private let makeChat: () -> UIViewController
+
+    /// 以前这三样是可选属性（`var careViewModel: CareViewModel?`），组合根建完再一个个赋值。
+    /// 漏赋一行不报错、不崩 —— 关怀卡片就永远不出现，点鸟巢也没反应。
+    /// 改成 init 注入之后，少传一个就编译不过（09-25）。
+    init(viewModel: HomeViewModel,
+         makeCompose: @escaping (_ backdrop: UIImage?, _ onClose: @escaping () -> Void) -> UIViewController,
+         makeChat: @escaping () -> UIViewController) {
+        self.viewModel = viewModel
+        self.makeCompose = makeCompose
+        self.makeChat = makeChat
+        super.init(nibName: nil, bundle: nil)
     }
-    
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
     // MARK: -
-    
+
     override func viewDidLoad() {
         super.viewDidLoad()
         
@@ -84,10 +97,9 @@ final class HomeViewController: UIViewController {
             self.dismissCare()          // 用户去写日记了，卡片让路
             let backdrop = self.view.blurredSnapshot(radius: 5)
             
-            guard let composeVC = self.makeComposeViewController?(backdrop, { [weak self] in
+            let composeVC = self.makeCompose(backdrop) { [weak self] in
                 self?.setCovered(false)
-                
-            }) else { return }
+            }
             composeVC.modalPresentationStyle = .overFullScreen
             composeVC.modalTransitionStyle = .crossDissolve
             self.setCovered(true)
@@ -99,8 +111,7 @@ final class HomeViewController: UIViewController {
             UIImpactFeedbackGenerator(style: .soft).impactOccurred()
             guard let self else { return }
             self.dismissCare()
-            guard let chatVC = self.makeChatViewController?() else { return }
-            self.present(chatVC,animated: true)
+            self.present(self.makeChat(), animated: true)
         }
         
     }
@@ -240,46 +251,36 @@ final class HomeViewController: UIViewController {
         // 唯一写进库的是 firstSeenAt —— 它属于「露面的生命」，不是「内容的生命」：
         // 记的是「这句话被看到过了」，不是「这句话该不该继续挂着」。
 
+        /// 该演什么由 ViewModel 判（`CareCardAction.decide`，有单测），这里只管按结果演。
+        /// 幂等：什么时候调都行，正演着的那条不会重放。
         private func presentCareIfNeeded() {
-            // 不在眼前就别演。
-            //
-            // 挡的不是「白演一场」，是**会把这条关怀标记成看过了**：
-            // 从后台回来时用户可能停在广场页，`dataDidChange` 照样打到这儿，
-            // 卡片在没人看的首页上滑出、3 秒后落库 —— 这条关怀就这么白说了。
-            // 回到首页时 viewDidAppear / pageVisibilityDidChange 会再来一次。
-            guard isCurrentPage, !isCoverd else { return }
-
-            guard let care = careViewModel?.activeCare() else {
-                // 挂着的那条退场了（AI 换掉了、或满 3 天）—— 卡片跟着收掉。
-                // 卡片不会自己走（没有兜底定时器），**没有这一条它会一直挂着一句已经作废的话**。
+            // 「在眼前」= 是当前 tab、也没被写日记的浮层盖住。为什么不在眼前就不能演，见 decide 里第一条
+            switch viewModel.careAction(isVisible: isCurrentPage && !isCoverd, showingId: showingCareId) {
+            case .none:
+                break
+            case .dismiss:
                 dismissCare()
-                return
-            }
-
-            // 正演着的就是它，别重放
-            guard showingCareId != care.id else { return }
-
-            // 换了一条：旧的先淡出，走完再让新的开口。
-            // 不能直接盖上去 —— slideIn 会把 alpha 归零再弹回来，旧话新话会闪一下。
-            guard showingCareId == nil else {
+            case .replace:
+                // 旧的先淡出，走完再问一次 —— 那时卡片空了，就会轮到新的那条开口
                 dismissCare { [weak self] in self?.presentCareIfNeeded() }
-                return
+            case .speak(let care):
+                showCare(care, form: .speaking)
+            case .linger(let care):
+                showCare(care, form: .lingering)
             }
+        }
 
+        private func showCare(_ care: PendingCare, form: CareCardView.Form) {
             showingCareId = care.id
             careCard.setText(care.text)
-
-            // 「说」还是「在」—— 整个分叉就在这一行。
-            // 一条关怀会在这里露面很多次（每次进首页、每次切 tab 回来都算），
-            // 但她**只说了一次**。第一次才配得上滑出和尾巴跟随。
-            if care.firstSeenAt == nil {
-                setCareForm(.speaking)
+            setCareForm(form)
+            switch form {
+            case .speaking:
                 careCard.slideIn()
                 scheduleFirstSeen(for: care.id)
                 // **不设任何定时器**：第一次就从头清晰到尾。
                 // 中途自己淡掉会让人以为看漏了什么 —— 浅下去是下一次进首页的事。
-            } else {
-                setCareForm(.lingering)
+            case .lingering:
                 careCard.appearQuietly()
                 // 它不是一次露面，是那句话还在。什么时候消失由关怀引擎说了算
                 // （AI 判替换 / 满 3 天兜底），UI 这边只在用户离开首页时收掉它。
@@ -293,7 +294,7 @@ final class HomeViewController: UIViewController {
                 self.careFirstSeen = nil
                 // 传 id 而不是读 showingCareId：这 3 秒里引擎完全可能换了一条，
                 // 要记的仍然是**刚才滑出来的那条**。
-                self.careViewModel?.markSeen(id)
+                self.viewModel.markSeen(id)
             }
             careFirstSeen = work
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.firstSeenDelay, execute: work)
@@ -322,40 +323,61 @@ final class HomeViewController: UIViewController {
             CATransaction.commit()
         }
         
+        /// 日期标题、那行小字、底部提示、鸟巢提示圈。幂等，多画几次无所谓。
+        ///
+        /// 「今天的蛋孵了没有」以前是个从来没被赋值的 `laidToday`，孵完蛋首页还写着「巢是空的」。
+        /// 现在每次重画都问 ViewModel。调用时机：viewDidLoad、每次进首页（viewWillAppear，
+        /// 从广场页孵完蛋切回来就靠它）、回前台和跨零点（dataDidChange）。
         private func updateCopy() {
+            let laidToday = viewModel.hasEggToday
             dateLabel.attributedText = AppFont.attributed(
                 ChineseDate.title(), size: 38, color: Sky.ink, kern: 38 * 0.03, lineHeight: 38 * 1.15
             )
             subLabel.attributedText = AppFont.attributed(
                 laidToday ? "今天的蛋在巢里了" : "巢是空的", size: 16, color: Sky.ink(0.42)
             )
+            // 原来写的是「往左滑，看这一周」—— 那是左右分页时代的操作，切片 13 换成底部 tab 之后滑不动了。
+            // 以前 laidToday 永远是 false，这句从来没露过面，所以一直没人发现
             hintLabel.attributedText = AppFont.attributed(
-                laidToday ? "往左滑，看这一周" : "轻点鸟巢", size: 15, color: Sky.ink(0.4)
+                laidToday ? "点下面的日历，看这一周" : "轻点鸟巢", size: 15, color: Sky.ink(0.4)
             )
             island.setNestHintVisible(!laidToday)
+        }
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            updateCopy()
         }
         
         // MARK: - 帧循环
         
+        // 动画开不开只有一个出口：syncRunningState。viewDidAppear / viewDidDisappear 只报告「在不在屏幕上」。
+        //
+        // 以前这两个方法自己直接开关动画，而且 **viewDidDisappear 从来不把 isOnScreen 设回 false**。
+        // 切 tab 回首页时，容器先发 pageVisibilityDidChange(true)、后走 viewWillAppear ——
+        // isOnScreen 还是上次留下的 true，syncRunningState 就在**页面还没挂上窗口**时把动画开了。
+        // 窗口外加 / 删 Core Animation 动画靠不住（09-25 实测）：
+        //   · 窗口外加的岛浮动，挂上窗口后没了（viewDidAppear 那次又加了一遍才有）
+        //   · 窗口外加的提示圈脉冲，随后在 viewWillAppear 里删掉了 —— 模型层的 animationKeys 是空的，
+        //     屏幕上却一直在闪。渲染那边留了一个代码再也够不着的「幽灵动画」
+        // 以前 laidToday 永远是 false、提示圈本来就该闪，所以看不出来；首页接上「今天孵了没有」之后，
+        // 孵完蛋切回来，提示圈该消失却一直在闪，才露出来。
         override func viewDidAppear(_ animated: Bool) {
             super.viewDidAppear(animated)
-            island.startBreathing()
-            startShadowBreathing()
-            island.hen?.resumeRendering()
-            startLoop()
             isOnScreen = true
+            syncRunningState()
             presentCareIfNeeded()
         }
-        
+
         override func viewDidDisappear(_ animated: Bool) {
             super.viewDidDisappear(animated)
+            isOnScreen = false
             dismissCare()
-            stopLoop()
-            island.stopBreathing()
-            islandShadow.removeAnimation(forKey: "breathe")
-            island.hen?.pauseRendering()
+            syncRunningState()
         }
-        
+
+        /// 岛的浮动、影子呼吸、母鸡渲染、帧循环：四样一起开、一起关。
+        /// 三个条件都满足才开：已经挂在屏幕上、是当前 tab、没被写日记的浮层盖住。
         private func syncRunningState() {
             let shouldRun = isOnScreen && isCurrentPage && !isCoverd
             guard shouldRun != isRunning else { return }

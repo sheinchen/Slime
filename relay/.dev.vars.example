@@ -1,0 +1,6 @@
+# 本地跑 `npm run dev` 时用的秘密。复制成 .dev.vars 再填(.dev.vars 已被 .gitignore 忽略)。
+# 线上的秘密不在这里,在 Cloudflare 上用 `npx wrangler secret put` 设。
+DEEPSEEK_API_KEY=
+DEV_TOKEN=
+# 想让本地中转打到假服务器而不是真 DeepSeek,取消下一行的注释
+# UPSTREAM_URL=http://127.0.0.1:9999/chat/completions

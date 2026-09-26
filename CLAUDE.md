@@ -23,7 +23,7 @@
 - **存储**:Core Data
 - **架构**:MVVM + Repository。View 只负责显示,业务逻辑在 ViewModel,数据读写全部走 Repository;跨仓库+网络的业务流程放 `Services/`
 - **并发**:工程开了 `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` —— **一切默认主线程隔离**,纯值类型/纯函数要显式标 `nonisolated`。注意默认参数表达式是**非隔离**的,不能在那里 new 隔离类型(要用 `= nil` + init 体内构造)
-- **形态**:本地为主(纯单机,无登录、无账号);唯一网络依赖是 AI 调用(经轻后端中转藏 key,尚未做)
+- **形态**:本地为主(纯单机,无登录、无账号);唯一网络依赖是 AI 调用(经 Cloudflare Worker 中转藏 key,代码在 `relay/`,见 §6「后端中转」)
 - **情绪与 AI 输出(已锁死)**:情绪枚举 6 类 —— happy / calm / sad / angry / anxious / tired。`SlimeEmotion`、prompt 枚举约束、颜色映射均以此为准,不再增减。
   AI 目前三个用途,各自独立调用:①单篇日记 `analyze` → `AIAnalysis(emotion, reply)`;②一天收束 `summarizeDay` → `DayEggSummary(text, emotion)`;③多轮聊天 `chat` / `chatstream`(SSE)。
   ~~摘要/心愿/心愿时间点/话题分类那套六字段结构~~ **已放弃,不要按它实现**。情绪强度(`intensity` 1-3)是主动关照 payload 需要的,**待补到 `DayEgg` 上**。
@@ -44,7 +44,7 @@
 - **生成 ≠ 展示,而且合并在打开时做**:写日记**不触发**任何关怀逻辑(`postSaved` 事件已废弃);唯一事件是 `appOpened`(入口在 `sceneWillEnterForeground`,外面套了防重入;09-24 从 `sceneDidBecomeActive` 挪过来,见「实现时踩过的坑」)。打开时才调 AI 生成文案 —— 这样文案永远基于最新窗口,情绪反转不会弹出过时关怀。
   > 2026-09-17 改:**窗口含今天**(原来是 `before: today`,暗中实现「跨自然天」)。今天的蛋只在按住母鸡时出现,那个动作本身就是「收束今天」。
   > 代价:铁律「关怀不出现在写日记那次会话里」不再有硬保证 —— 在 App 里连续写、孵不会触发,但切走两分钟再回来就可能评估。
-- **顺序依赖**:打开 App 必须**先补完欠的蛋,再跑关怀闸门**。反了就缺最新一天,而那正是情绪反转的藏身处。已落在 `SceneDelegate.onAppActive()`。
+- **顺序依赖**:打开 App 必须**先补完欠的蛋,再跑关怀闸门**。反了就缺最新一天,而那正是情绪反转的藏身处。已落在 `AppOpenFlow.runOnce()`(09-25 从 SceneDelegate 搬出来),`AppOpenFlowTests` 锁着顺序和防重入。
 - **关怀退场交给 AI,本地只兜底**(2026-09-09 改;规格里那条「新蛋诞生就退场」已废弃):
   · **被替换** —— 关怀挂着时,AI 每次都能看到它(`PastCare` 带 `stillShowing` / `saidAt` / `about`),
     自己判断「旧的还贴不贴切」。判 `shouldShow: true` 就是「换成新的」,`show()` 会把旧的退掉。
@@ -121,11 +121,77 @@
 - 代码风格:清晰优先,命名见名知意。
 - 依赖:SnapKit(SPM)、Rive(母鸡动画)。
 - 工程用 **PBXFileSystemSynchronizedRootGroup** —— 新建文件放进目录即自动进 target,不用手动加。
-- 目录分层:
-  `Models/`(Core Data 实体 + 领域模型)、`Repositories/`(仓库读写)、`Services/`(AI 网络层 + 跨仓库业务流程,如 `AIService` / `DayEggService`)、`Care/`(关怀引擎)、`ViewModels/`、`ViewControllers/`、`Views/`、`Core/`(配色/字体/中文日期/缓动等工具)。
+- 目录分层(09-25 整理过一次)。**按层分是主轴**(MVVM + Repository 的层次一眼看得出),层里面再按页面 / 子系统分:
+  ```
+  Slime/
+  ├── App/              AppDelegate、SceneDelegate(组合根)
+  ├── Models/           领域值类型(SlimeItem、PendingCare、CareDecision…)
+  │   └── CoreData/     CoreDataStack、Slime.xcdatamodeld、实体类
+  ├── Repositories/     仓库(只吐值类型)
+  ├── Services/         不属于某个子系统的跨仓库流程:AppOpenFlow、DayEggService
+  │   └── AI/           AI 网络层,见下方「AI 层」
+  ├── Care/             关怀子系统:CareEngine、CareGate
+  ├── Recall/           检索子系统:RecallService(编排)、RecallIndexService、RecallRule…
+  │   └── Embedding/    端侧向量:BertTokenizer、TextEmbedder、模型、词表
+  ├── ViewModels/       ViewControllers/
+  ├── Views/            Common / Style(配色字体缓动)/ Home / Square / Egg / Chat / Hen
+  ├── Core/             跨层小工具:ChineseDate、母鸡的本地台词(HenGreeting / HenUnread)
+  ├── Debug/            只在 Debug 构建存在:LaunchOptions、DebugSeeder、CareDebugViewController
+  ├── Resources/        Assets.xcassets、Fonts、Images、Hen.riv
+  └── Info.plist        **不能挪**:工程设置 INFOPLIST_FILE 写死了这个路径
+  ```
+  · **Care / Recall 是两个子系统,各自连编排带算法放一起**(RecallService 以前在 Services/,09-25 挪进 Recall/)。
+    `Services/` 只放不归哪个子系统的流程。AI 的具体实现一律在 `Services/AI/`,子系统只认协议
+  · 资源文件放哪个子文件夹都行:构建时一律平铺进 .app 根目录,代码按名字取(`Bundle.main.url(forResource:)`、`UIImage(named:)`)。
+    09-25 挪完比对过 .app 里的 50 个条目,一个没变
+  · `StubAIService` 虽然也只在 Debug 里有,但留在 `Services/AI/`:加新的 AI 协议时得同时改它,放在协议旁边不会漏
 - 单测在 `SlimeTests/`(XCTest,`@testable import Slime`)。只测纯函数,不碰 Core Data。
+  按子系统分:`App/`、`Care/`、`Recall/`;**要真调 API 的 eval 在各自的 `Eval/` 子文件夹里**(默认跳过)。
+  `-only-testing:SlimeTests/CareEvalTests` 按类名找,不受文件夹影响
+  ⚠️ **碰 App 里的类(VM / Service / 仓库)的测试,一律写成 `@MainActor` + `async`**,哪怕里面一个 `await` 都没有:
+  ```swift
+  @MainActor
+  final class XxxTests: XCTestCase {
+      func test_xxx() async { ... }
+  }
+  ```
+  原因是 Swift 运行时的 bug(swiftlang/swift#85663、#87316):工程默认 MainActor 隔离 → 每个类的 deinit 都是
+  isolated deinit;**对象在 Task 之外被释放**时,运行时给 task-local 建的标记用错了分配器,释放时
+  `pointer being freed was not allocated` 直接崩(栈:`swift_task_deinitOnExecutorMainActorBackDeploy` → `StopLookupScope`)。
+  同步测试方法跑在 Task 之外,所以对象一释放就崩;async 测试方法跑在 Task 里,不会。Xcode 26.4 修了,本机是 26.2。
+  · 09-25 实测:同一个 `CoreDataPostRepository()` / `SquareViewModel()`(嵌套 `DayEggService`),同步测试 4/4 崩,async 3/3 过
+  · **App 里撞不到**:开关一次聊天,`heap` 看 `ChatViewModel` 1 → 0 真的释放了,进程没崩
+  · **别用** `keepAlive` 把对象留到进程结束(09-24/25 临时用过,是在掩盖而不是绕开),
+    **也别**给每个类加 `nonisolated deinit {}` —— 为一个只在测试里出现的运行时 bug 改产品代码,升级 Xcode 之后全是死代码
+  · 纯函数、`nonisolated` 值类型的测试照旧写同步的,它们没有 isolated deinit
+- **依赖只从组合根来**(09-25 定):Service / ViewModel 的依赖参数一律必填,**不给默认值**。
+  默认值只留给两类:① 值(`Calendar`、`now` 时钟、`AIConfig` 里的配置)② 本来就只有一个的共享资源
+  (仓库的 `context` 默认 `CoreDataStack.shared.viewContext` —— 多建几个仓库对象也是同一个库,无害)。
+  **判据:这个默认值被悄悄用上时,会不会多出一个有状态的实例,或者绕过打桩开关打到真 AI?会就不许给。**
+  以前 `DayEggService` / `SquareViewModel` / `ComposeViewModel` / `CareViewModel` 都有默认值;
+  去掉之后编译器当场揪出组合根**漏传了 `eggStore`**(VM 一直在用自己另建的那个)。
+  例外两个都是 DEBUG 工具:`CareDebugViewController` 自己 new 仓库(注释里写了理由)、`DebugSeeder`。
+- **AI 层**(09-25 拆,原来是一个 713 行的 `DeepSeekAIService`)。`Services/AI/` 下:
+  · `AIClient` —— **唯一发请求的地方**:URL、安装 ID、状态码、外层信封、SSE。不懂任何业务。
+    发给自己的中转(`AIConfig.baseURL`),**App 里没有 key,请求体里也没有 `model`**(中转定)
+  · 一个能力一个文件,自带 prompt 和返回结构:`HenChatService`(写完日记回一句 + 聊天)、`DayEggSummarizer`、
+    `CareDecider`、`RecallIntentExtractor`、`MemoryReranker`;共享人设在 `HenPersona`,聊天的 system 在 `ChatPrompt`
+    (聊天上下文是 ChatViewModel 拼的,所以它不跟 HenChatService 放一起)
+  · 协议没变(`AIService` / `DayEggSummarizing` / `CareDeciding` / `RecallIntentExtracting` / `RecallReranking`),组合根照样按位置换桩
+  · **等多久由每个能力自己声明**(`AIClient.Patience`):写日记 `.total(8)`、重排 `.idle(15)`、其余 `.standard`(60 秒空闲)
+  · ⚠️ **挪 prompt 必须整段原样搬**。多行字面量的缩进是内容的一部分(`HenPersona` 结尾 `"""` 顶格 → 正文带 4 个空格、末尾没换行)。
+    09-25 是用脚本按行号从老文件切出来贴的,没手抄;搬完起一个本地假服务器(ATS 要在副本里开 `NSAllowsLocalNetworking`),
+    老新两份代码各打一遍同一组调用:**6 份 system prompt 逐字节一致**,12 个请求按内容全等,8 秒 / 15 秒 / 不限时三种超时行为不变
+  · 🔎 **发给模型的 JSON 载荷要加 `.sortedKeys`**(09-25 加上):不加的话 `JSONEncoder` 每次吐出来的键顺序都不一样,
+    同一次运行里两次请求就一次「近14天」在前、一次「最近对ta说过的话」在前 —— 模型每次看到的排版不同,是 eval 的噪声源。
+    **以后新加任何发给模型的 JSON,都要带 `.sortedKeys`**。加完重跑了关怀和重排两份基线(见各自一节)
+- **仓库只吐值类型**(09-25 定):`Post` 等托管对象出不了 `Repositories/`。`PostRepository` 以前返回 `[Post]`,
+  结果「转 SlimeItem + 按天归堆」写了两份、「这篇算哪天」散在 5 处、依赖它的 Service 没法用普通数组做假仓库。
+  · **「这篇算哪天」只在 `CoreDataPostRepository` 里**(`day(of:)` + `dayRange` 谓词),下游直接用 `SlimeItem.day`
+  · 老日记没有 `dayKey`,谓词里单独捞(`dayKey == nil AND createdAt 在区间里`)。**只写前半句,老日记会从广场上整片消失,不报错**
+  · 以后要补齐老数据的 `dayKey`、把它改成必填,就能删掉那半句 —— 改必填要加模型版本
 - **改 Core Data 模型必须加新版本,不许就地改**(09-23 定):
-  `Slime.xcdatamodeld/` 下每个 `.xcdatamodel` 是一个版本,`.xccurrentversion` 指向当前那个。
+  `Models/CoreData/Slime.xcdatamodeld/` 下每个 `.xcdatamodel` 是一个版本,`.xccurrentversion` 指向当前那个。
   **旧版本要留在仓库里** —— 老库的 metadata 存的是旧模型的 hash,Core Data 要在 bundle 里
   找到那份旧模型,才能推断出迁移映射。就地改等于把源模型删了 → `loadPersistentStores` 报错
   → `CoreDataStack` 那句 `fatalError` 直接崩,**而且只崩装过旧版的设备,你自己删了 App 重装反而看不见**。
@@ -168,6 +234,55 @@
 | 14 | 月历 | **在周条上下拉**(或点月份标题)展开成月历(`MonthGridView` = 表头 + 6 行 `WeekRowView`);格子抽成共用的 `WeekRowView`,`Style.strip` / `.month` 两种摆法;选完日期收起并把周条带到那一周。**展开后横滑翻月**(月历也改成横向分页 collectionView,`months` 同 `weeks` 一次算全,最后一个永远是本月) |
 | 15 | 没网也能写日记 | **先存后分析**:点「收好」先落库(情绪、回复留空),再问 AI 补上;问不上母鸡说一句本地的「收好了」(`HenUnread`)。模型 **Slime 3**:`Post.emotion` 改可选、去掉默认 calm;`Post.slimeEmotion` 是唯一读口。`analyzeSession` 8 秒总时限,等待中不给取消 |
 | 16 | 孵今天·弱网 | 「今天正在孵」进 VM(`hatchingToday`),鸟巢画空白蛋 +「孵着呢…」;结果回来走 `refresh()`,不再画到别的日子上;`finishToday` 落库前再对一次日记;失败的预取不留着。**孵蛋不加总时限** |
+| 17 | 后端中转藏 key | Cloudflare Worker(`relay/`,线上 `slime-relay.hen-diary-2026.workers.dev`):认门 → 限流 → 白名单重建请求 → **原样边收边转**。App 只带安装 ID;模型、`max_tokens` 由中转定;`Secrets.plist` 挪出 `Slime/`。eval 也走中转 + 开发者通行证 |
+
+#### 后端中转(09-26 定,别推翻)
+
+- **key 只在 Cloudflare 的 secret 里**(`wrangler secret put`),代码、配置、App 里都没有。
+  以前 `Slime/Secrets.plist` 会被打进 App —— `Slime/` 是自动同步的文件夹,**放进去的任何文件都进包**。
+  现在 `Secrets.plist` 在**仓库根目录**(`DeepSeekAPIKey` 留作部署用、`RelayDevToken` 给 eval),`.gitignore` 照旧忽略。
+  **验证方式**:干净构建(`clean build`,增量构建可能残留删掉的资源)后,拿 key 的真实内容 `grep -rlF` 整个 `.app` → 0 个文件
+- **中转不懂业务**:不看 prompt、不解析回答、不记内容(日记是最私密的东西),只记上游状态码。
+  所以 prompt 还在 App 里,eval 照旧在客户端跑
+- **白名单重建,不原样转发**:只挑 `messages` / `response_format` / `temperature` / `stream` 四个字段,
+  `model` 和 `max_tokens`(2048)由中转定。原样转发 = 别人塞 `tools`、换贵模型,中转成了免费的通用 DeepSeek。
+  顺带:**换模型不用发 App 新版**(改 `wrangler.jsonc` 的 `MODEL`,先跑 eval)
+- **必须边收边转,不能攒完再回**(跟「写日记:先存后分析」里那条总时限 / 空闲超时是一回事):
+  DeepSeek 拥堵时先回 200 再一直发空行保活,App 的 60 秒空闲超时靠「有字节在到」续命。
+  所以是 `new Response(upstream.body)` 直接交出字节流,并加 `Cache-Control: no-transform`
+  (防 Cloudflare 边缘压缩把零碎小块攒起来)。09-26 用假上游在 Node 模拟和本地 workerd 里各验过:空行每 0.5 秒到一个
+- **错误分两类**:中转自己拒的是 4xx(`bad_*` / `too_*` / `rate_limited`),上游的错一律 502 `upstream_<状态码>`。
+  **`upstream_401` = key 没设对,`upstream_402` = 余额不足**。App 不区分,非 2xx 都是 `AIError.badStatus`
+- **限流是减速带,不是墙 —— 09-26 线上实测量出来的**:每个安装 ID 30 次/分、每个 IP 60 次/分。
+  同一条连接连发:第 32 次开始 429 ✅;**每次新开连接连发 105 次:一次都没拦住**(连 IP 那道也没有)。
+  Cloudflare 的限流是按机器缓存、异步同步的,新连接被打散到同机房不同机器上。
+  正常 App 会复用连接(HTTP/2),计数基本准;**刻意每次新开连接的脚本拦不住**。
+  → **真正封顶损失的是 DeepSeek 余额(预付费),账户里只充小额是硬要求,不是建议**。
+  要做实:Durable Objects 强一致计数,或 App Attest(要真机 + 开发者账号)。等真看到异常流量再做
+- **安装 ID 不是凭证**:`AIConfig.installID`,第一次用到时生成的 UUID,存 UserDefaults。谁都能伪造,所以才有 IP 那道
+- **eval 也走中转,不留直连后门**:模型是中转定的,直连的话中转一换模型,eval 测的还是旧的,基线跟 App 对不上。
+  **开发者通行证**(`X-Dev-Token`,中转那边是 `DEV_TOKEN` secret)只给 eval:重排 eval 并发 4 路、一分钟上百次,
+  被限流时重排返回空选 —— **跟「模型判断不提旧事」一模一样,eval 会静默算错**。
+  通行证从仓库根目录的 `Secrets.plist` 读(`#filePath` 定位,模拟器里的进程能读 Mac 上的文件),**永远不进 App**。
+  比对用恒定时间比较(`crypto.subtle.timingSafeEqual`),不用 `===`
+- 🔎 **DeepSeek 会在背后换 `deepseek-chat` 指向的模型**:09-26 发 `deepseek-chat`,回复的 `model` 字段是 `deepseek-flash`。
+  以前直连也一样,不是中转造成的。**eval 莫名漂移时先看这个字段**
+- **09-26 端到端验过**(改中转相关的东西后照这个再验一遍):
+  · 线上:重排 eval 全量 26×5 走中转,和 09-25 直连基线一致(逐条全对 24/25、must 100%、exclude 4/125、空选守住 56/60,
+    唯一判错仍是 #5);**130 次 4 路并发无一被限流**(被限流会表现成正例莫名空选);关怀 #1–#4 4/4、禁词 0
+  · 模拟器 `-UseTestStore`:写一篇 → 库里情绪、回复都补上了(中转 0.95 秒);聊一轮 = 3 个请求
+    (提炼 / 重排 / `Accept: text/event-stream` 流式)全 200,中转 CPU ≤ 1 毫秒(免费版上限 10)
+  · 看线上请求:`relay/` 下 `npx wrangler tail`(只有状态码和请求头,不含内容)
+  · ⚠️ 模拟器工具的 `text` 打中文会变乱码(UTF-8 被当 MacRoman 解)。绕法:`LANG=en_US.UTF-8` 下
+    `printf '%s' "中文" | xcrun simctl pbcopy <udid>`,再在输入框里点两下调出菜单点 Paste
+
+##### 部署 / 运维踩过的坑
+
+- **`wrangler` 命令必须在 `relay/` 下跑**。在仓库根目录跑 `secret put` 报「Required Worker name missing」,
+  而且 `../Secrets.plist` 会指到 `Desktop/` 去、读出空串。命令开头写 `cd .../relay &&` 最保险
+- **secret 要用 `printf %s "$(…)"` 喂**,去掉末尾换行 —— 带着换行存进去,key 变成 `sk-xxx\n`
+- **新注册的 workers.dev 子域名,头几分钟 TLS 握手失败**(`sslv3 alert handshake failure`),等证书签好就行,不是代码问题
+- 完整部署步骤、换 key、看日志、错误码表:见 [`relay/README.md`](relay/README.md)
 
 #### 写日记:先存后分析(09-23 定,别推翻)
 
@@ -301,6 +416,11 @@
   (那本来是它给系统 tabBar 让位用的)。在 `viewDidLoad` 里设一次会被静静抹掉 ——
   **不报错、不崩,只是页面底部的东西被浮动条盖住看不见**。
   要设就设在 `viewDidLayoutSubviews`,并加相等判断防止改 inset 又触发布局来回震荡。
+- **切 tab 时 `pageVisibilityDidChange` 比 `viewWillAppear` 先到;页面还没挂上窗口时别开关 Core Animation 动画**(09-25)。
+  首页的 `isOnScreen` 以前在 `viewDidDisappear` 里不复位,切回首页时 `syncRunningState` 在窗口外就把动画开了。
+  窗口外加的动画挂上窗口后会丢,窗口外删的动画删不掉 —— 模型层 `animationKeys()` 是空的,屏幕上提示圈却一直闪
+  (代码再也够不着的「幽灵动画」)。现在 `viewDidAppear` / `viewDidDisappear` 只报告在不在屏幕上,开关动画只走 `syncRunningState`。
+  以前 `laidToday` 永远是 false、提示圈本来就该闪,所以一直没露出来
 - **周条那种「横向 scrollView 套在横向分页 scrollView 里」的组合不要再造**。
   UIKit 的规则是:内层在**手势开始那一刻**就已经在边界、无法再朝该方向滚,
   这次拖动直接让给外层。`alwaysBounceHorizontal` 只覆盖「拖到一半撞上边界」,
@@ -326,8 +446,19 @@
   顶上那几个统计**不是装饰**,是去给「把换内容和重新开口拆开」那个候选方案取前提数据的 ——
   尤其「替换里引用全是旧日子 N/M」那一栏,占比决定那个方案值不值得做
 - ✅ 10 eval:41 条 golden set + 文案抽查(禁词硬判、范围词/超长只报)。
-  **当前基线(09-23,41 条 × 5 次,prompt 77 行):
-  决策 precision 0.82 / recall 0.90;文案 硬禁词 0 例 ✅、范围词 1 例(且是合法用法)**
+  **当前基线(09-25,41 条 × 5 次,prompt 77 行,载荷 `.sortedKeys`):
+  决策 precision 0.87 / recall 1.00(TP 20 / FP 3 / FN 0 / TN 18);
+  文案 硬禁词 1 例 ❌(#25「今晚」)、范围词 2 例(#6「那几天 / 那阵子的自我怀疑」,引用 2 天,描述的是状态)**
+  · 判错只剩「保持」那族三条:#30 4/5、#31 5/5、#37 5/5 —— 跟 09-23 一样,结构性的,不是噪声
+  · 不稳定 7 条:#10(2/5)#12(1/5)#21(3/5)#25(4/5)#30 #32(1/5)#35(2/5)
+  · **跟 09-23 比的变化别当成 `.sortedKeys` 的功劳**:翻过来的 #10(3/5→2/5)、#25(2/5→4/5)、#41(→5/5)
+    全是早就标过的边界用例,各自的 n=10 A/B 本来就在五成上下。`.sortedKeys` 去掉的是一个噪声源,
+    不是改了模型的判断;要证明它影响了某条,按老规矩对那条单独做 n=10 A/B
+  · 固定之后模型看到的顺序是「最近对ta说过的话」在前、「近14天」在后(按 Unicode 排,**不是设计出来的**)。
+    prompt 正文先讲时间线再讲说过的话,两者顺序相反 —— 想试「时间线在前」得改成手动控制顺序,是另一个实验
+  · 09-25 这一跑结束时**测试进程崩了**(报告已经完整打印):`CareEvalTests` 当时没标 `@MainActor`,
+    拆 AI 层之后 `CareDecider` 有存储属性、析构走 isolated deinit,撞上 §5 那个运行时 bug。已补 `@MainActor`
+  **上一版基线(09-23,载荷键顺序随机):precision 0.82 / recall 0.90;硬禁词 0、范围词 1**
   ⚠️ **recall 0.90 不可信** —— 掉下去的 #25 #41 专项 n=10 跑都是判对的(6/10、7/10)。
   详见下方「文案规则:两条都做了 A/B」
   · 判错的**三跑全是同四条**:#10 #30 #31 #37 —— 稳定,不是噪声
@@ -560,10 +691,12 @@ prompt 里禁了**会过期的时间词**(「今天」「今晚」「刚刚」),
 - **`firstSeenAt` 必须落库,而且不能在 `slideIn()` 那一刻写** —— 那记的是「播过动画」。
   用户一开 App 就点鸟巢,卡片刚冒头就被 `dismissCare()` 收掉,那次要是算数,
   这条关怀从此只剩浅色形态,**等于白说**。现在是滑出后活满 3 秒才记,被打断就取消。
-- **`presentCareIfNeeded()` 必须先 `guard isCurrentPage, !isCoverd`**。
-  从后台回来时用户可能停在广场页,`dataDidChange` 照样打到这儿,卡片在没人看的首页上滑出、
+- **下面两条判断 09-25 抽成了纯函数 `CareCardAction.decide`**(在 HomeViewModel.swift),`CareCardActionTests` 一条坑一个用例。
+  VC 的 `presentCareIfNeeded()` 只剩「按结果演」
+- **不在眼前就不演**(decide 的第一条 `isVisible`)。
+  从后台回来时用户可能停在广场页,`dataDidChange` 照样打到首页,卡片在没人看的首页上滑出、
   3 秒后落库。**这条守卫看着像多余的判断,删掉就会静默地吃掉关怀。**
-- **卡片不再自己消失,所以 `presentCareIfNeeded()` 要按 id 比、取不到要收掉**。
+- **卡片不再自己消失,所以要按 id 比、取不到要收掉**。
   原来的 `guard showingCareId == nil else { return }` 会让新关怀永远进不来;
   `activeCare()` 返回 nil 时直接 return 会让作废的话一直挂着。
 - **`subLabel` 要顶到 `.required` 抗压**。lingering 挤在它右边,不顶的话 Auto Layout 会选择
@@ -653,6 +786,12 @@ prompt 里禁了**会过期的时间词**(「今天」「今晚」「刚刚」),
 - ✅ LLM 重排:RRF 候选 10 条 → 临时 ID 白名单精排 → 返回 0...3 条；网络/JSON 失败时返回空，不降级成硬塞 Top 3
 - ✅ 接进 `ChatViewModel`:检索历史不重复当前消息；生成阶段仍有最后否决权
 
+**重排 eval 基线(09-25,26 条 × 5 次,载荷 `.sortedKeys`,第一次记录)**:
+计分 25 条(正例 13 / 空选 12)。must 命中 **100%**、exclude 违反 5/125、空选守住 55/60、
+平均选中 0.94 条、**逐条全对 24/25**、摇摆 0 条。两条纯算术基线:全空 12/25、前三条 0/25。
+唯一判错 **#5 泛化累**:标注空选,模型 5/5 选 110(「什么都不想干」,字面几乎一样的另一天)。
+理由是「同样状态,属同一具体情境的延续」—— **5/5 稳定地不同意,先读理由再决定谁错**,别急着改 prompt。
+
 实测(2026-09-11):baseline(关键词+情绪) r@10 **0.95**,仅向量 **0.90**,三路融合 **1.00**。
 Apple `NLEmbedding` 中文句向量 r@5 只有 0.11,**比随机的 0.17 还差**,有 hub 现象
 (一条日记跟所有 query 都近)。已放弃,别再试。
@@ -685,16 +824,19 @@ Apple `NLEmbedding` 中文句向量 r@5 只有 0.11,**比随机的 0.17 还差**
 
 ### 已知待清理
 
-- `ChatMessageItem` 缺 `nonisolated`(同 `SlimeItem` 的修法)
+- **SceneDelegate 还剩「导航」没拆**(09-25):写日记 / 聊天的工厂闭包、写完日记后刷新各页,还在组合根里。
+  页面再多(比如给 `.resume` 做会话列表)再抽导航对象。流程、DEBUG 配置、首页注入 09-25 已经处理
+- **广播靠手动**:`broadcastDataChange` 的调用点都在 SceneDelegate / AppOpenFlow 里,每多一个写入方就得记得广播。
+  两个页面够用;出现第三个页面或写入方时,改成仓库发变更通知、页面自己订阅
 - `-CareStep2` / `-CareStep3` 两个旧别名(现在叫 `-CareTurn` / `-CareFlat`),可以收掉
-- `CareViewModel` 目前只被首页用
 - `SceneDelegate` 里包着 `RootTabBarController` 的那层 `UINavigationController` 是摆设 ——
   全项目没有一处 `pushViewController`,compose / chat 都是 present。可以去掉
 
 ### 调试关怀系统的固定套路
 
-1. Scheme 勾 `-UseTestStore`(Edit Scheme → Run → Arguments),否则 `DebugSeeder` 拒绝播种
-2. 跑 App → 看控制台那段 `🔍 关怀检查`
+1. Scheme 勾 `-UseTestStore`(Edit Scheme → Run → Arguments),否则 `DebugSeeder` 拒绝播种。
+   **所有启动参数的解析和说明都在 `Slime/Debug/LaunchOptions.swift`**(09-25 收拢),单测在 `LaunchOptionsTests`
+2. 跑 App(控制台那段 `🔍 关怀检查` 的 print 已经收掉了,看第 3 步的 debug 页)
 3. **长按首页日期** → 关怀 debug 页:统计 + 关怀历史 + 检查日志,不用退出 App。
    要看原始行(或者页面本身有问题)时再退出 App → `bash check.sh` 查库
    (**代码以为干了什么,和库里真发生了什么,是两回事**)
@@ -703,7 +845,8 @@ Apple `NLEmbedding` 中文句向量 r@5 只有 0.11,**比随机的 0.17 还差**
 5. 跑 eval:`TEST_RUNNER_RUN_EVAL=1 TEST_RUNNER_EVAL_RUNS=5 xcodebuild test-without-building
    ... -only-testing:SlimeTests/CareEvalTests -resultBundlePath X.xcresult`,
    然后 `xcrun xcresulttool export attachments --path X.xcresult --output-path DIR` 取报告
-   (命令行跑测试时 `print` 会丢,所以报告走 `XCTAttachment`)
+   (命令行跑测试时 `print` 会丢,所以报告走 `XCTAttachment`)。
+   eval 走线上中转 + 开发者通行证(仓库根目录 `Secrets.plist` 的 `RelayDevToken`,见 `SlimeTests/EvalClient.swift`)
 6. 报告末尾有一节**文案抽查** —— 和 precision / recall 是两回事:那两个量「说不说」,
    这一节量「说了什么」(规格第 10 节的「文案铁律:禁词 0 例」就是它)。分两档:
    · **硬禁词**(prompt 里逐字点名的:「连续」「检测」「记录显示」「今天」「刚刚」…)
@@ -719,8 +862,12 @@ Apple `NLEmbedding` 中文句向量 r@5 只有 0.11,**比随机的 0.17 还差**
 
 ### 关键待确认项
 
-- 轻后端中转藏 key(现为客户端直连 DeepSeek + `Secrets.plist`,**上线前必换**)
-- 真机 / 开发者账号、隐私处理
+- **上架地区:只上海外(不含中国大陆)**(09-26 定)。所以中转用 Cloudflare Workers;
+  要上大陆得换国内云 + ICP 备案域名,还有 App 备案、生成式 AI 备案/登记
+- **隐私同意 + 隐私政策**:日记经 Cloudflare 发给 DeepSeek。审核指南要求把个人数据交给第三方 AI 前
+  明确告知并取得同意(以最新版指南为准)。**上架前必做**
+- 真机 / 开发者账号
+- 限流做实(Durable Objects 强一致计数 或 App Attest)—— 等上线后真看到异常流量再做,见「后端中转」
 
 ---
 

@@ -42,21 +42,27 @@ final class StubAIService: AIService,
     private let latency: UInt64
     private let offline: Bool
 
-    /// - Parameter careVerdict: 传 nil 就看启动参数 `-StubQuiet`，默认 `.say`。
+    /// 桩**自己不读启动参数**（以前读，09-25 收进 LaunchOptions）。怎么演由调用方说了算：
+    /// 组合根用下面那个 `init(stubs:)`，测试可以直接传值。
+    ///
+    /// - Parameter careVerdict: 关怀每次都说还是每次都不说。
     /// - Parameter latencyMs: 假装的网络耗时。**不要调成 0** ——
     ///   孵蛋动画、发送按钮的 loading 态都靠这段等待才看得见，
     ///   瞬间返回反而会让 UI 的中间状态测不到。
-    ///   传 nil 就看启动参数 `-StubSlow`：有就拖 10 秒（弱网），没有 0.3 秒。
-    ///   10 秒是为了能看清、也来得及操作等待中的样子：「孵着呢…」「咕，在听呢」、
-    ///   孵蛋等的时候切去别的日子 / 去首页写一篇。
-    /// - Parameter offline: 传 nil 就看启动参数 `-StubOffline`。为 true 时每一路都假装没网，
+    /// - Parameter offline: 为 true 时每一路都假装没网，
     ///   验「没网也能写」：日记照存、情绪留空、母鸡说本地那句。
-    init(careVerdict: CareVerdict? = nil, latencyMs: UInt64? = nil, offline: Bool? = nil) {
+    init(careVerdict: CareVerdict = .say, latencyMs: UInt64 = 300, offline: Bool = false) {
         self.careVerdict = careVerdict
-            ?? (CommandLine.arguments.contains("-StubQuiet") ? .quiet : .say)
-        let ms = latencyMs ?? (CommandLine.arguments.contains("-StubSlow") ? 10_000 : 300)
-        self.latency = ms * 1_000_000
-        self.offline = offline ?? CommandLine.arguments.contains("-StubOffline")
+        self.latency = latencyMs * 1_000_000
+        self.offline = offline
+    }
+
+    /// 按启动参数演。`-StubSlow` 拖 10 秒而不是 0.3 秒：10 秒是为了能看清、也来得及操作等待中的样子 ——
+    /// 「孵着呢…」「咕，在听呢」、孵蛋等的时候切去别的日子 / 去首页写一篇。
+    convenience init(stubs: LaunchOptions.Stubs) {
+        self.init(careVerdict: stubs.quiet ? .quiet : .say,
+                  latencyMs: stubs.slow ? 10_000 : 300,
+                  offline: stubs.offline)
     }
 
     /// 假装走了一趟网络。没网的时候跟真的一样：等完了抛 `notConnectedToInternet`。

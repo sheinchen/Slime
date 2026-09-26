@@ -15,9 +15,10 @@ final class ComposeViewModel {
     private let repository: PostRepository
     private let aiService: AIService
 
-    init(repository: PostRepository = CoreDataPostRepository(),
-         aiService: AIService = DeepSeekAIService(),
-        ) {
+    /// 依赖必填，不给默认值（09-25 去掉的）。
+    /// 以前 `aiService` 默认直连真 AI —— 随手 `ComposeViewModel()` 就绕过了组合根的打桩开关，
+    /// 开着 `-StubAI` 也照样打真 API、花真钱。
+    init(repository: PostRepository, aiService: AIService) {
         self.repository = repository
         self.aiService = aiService
     }
@@ -37,7 +38,7 @@ final class ComposeViewModel {
         let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // ① 先存。从这一刻起日记就在了。
-        //    只留 id —— 下面要隔一次网络等待，别拿着托管对象跨过 await
+        //    只要 id：下面补分析时仓库会按 id 重新查（隔着一次网络等待，那篇可能已经被删了）
         let id = repository.create(content: trimmed).id
 
         // ② 再问 AI。只是补情绪和回复，问不上不影响日记本身

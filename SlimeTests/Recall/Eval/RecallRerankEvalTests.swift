@@ -87,9 +87,9 @@ final class RecallRerankEvalTests: XCTestCase {
             ProcessInfo.processInfo.environment["RUN_EVAL"] == "1",
             "eval 要真调 API，默认跳过。要跑就加 TEST_RUNNER_RUN_EVAL=1（见文件头注释）"
         )
-        XCTAssertFalse(AIConfig.apiKey.isEmpty, "读不到 Secrets.plist 里的 key")
+        XCTAssertNotNil(EvalClient.devToken, "读不到仓库根目录 Secrets.plist 里的 RelayDevToken（见 EvalClient）")
 
-        let ai = DeepSeekAIService()
+        let ai = MemoryReranker(client: EvalClient.make())
         let runs = runsPerCase
         let cases = RerankEvalCases.all
 

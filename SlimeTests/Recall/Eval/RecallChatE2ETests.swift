@@ -40,12 +40,16 @@ final class RecallChatE2ETests: XCTestCase {
     func test_母鸡会不会提起旧事() async throws {
         try XCTSkipUnless(ProcessInfo.processInfo.environment["RUN_EVAL"] == "1",
                           "要真调 API,默认跳过(见文件头注释)")
-        XCTAssertFalse(AIConfig.apiKey.isEmpty, "读不到 Secrets.plist 里的 key")
+        XCTAssertNotNil(EvalClient.devToken, "读不到仓库根目录 Secrets.plist 里的 RelayDevToken（见 EvalClient）")
 
         let context = CoreDataStack.shared.viewContext
         let posts = CoreDataPostRepository(context: context)
         let chatRepo = CoreDataChatRepository(context: context)
-        let ai = DeepSeekAIService()
+        // 检索要两路（提炼 + 重排），聊天一路；以前一个 DeepSeekAIService 全包，09-25 拆开
+        let client = EvalClient.make()
+        let intentAI = RecallIntentExtractor(client: client)
+        let rerankAI = MemoryReranker(client: client)
+        let chatAI = HenChatService(client: client)
         let embedder = try TextEmbedder()
 
         clearDiaries(in: context)
@@ -58,8 +62,8 @@ final class RecallChatE2ETests: XCTestCase {
 
         let recallService = RecallService(posts: posts,
                                           embedder: embedder,
-                                          ai: ai,
-                                          reranker: ai)
+                                          ai: intentAI,
+                                          reranker: rerankAI)
 
         // **措辞跟日记完全不一样**。用「方案又被打回来」当输入是自欺欺人 ——
         // 母鸡复述一遍就看着像提起了旧事,其实只是在重复用户自己的话。
@@ -74,8 +78,7 @@ final class RecallChatE2ETests: XCTestCase {
         //    多一次调用换「跟真实路径完全一致」,值。
         let vm = ChatViewModel(origin: .direct,
                                chatRepo: chatRepo,
-                               posts: posts,
-                               aiService: ai,
+                               aiService: chatAI,
                                recall: recallService)
         let reply = try await vm.send(message, onDelta: {})
 

@@ -1,0 +1,33 @@
+// Cloudflare Worker 的部署配置。`npx wrangler deploy` 读的就是它。
+{
+  // 部署后的地址是 https://<name>.<你的子域>.workers.dev
+  "name": "slime-relay",
+  "main": "src/index.ts",
+  // 运行时的行为版本。锁住它,Cloudflare 以后改默认行为也不会悄悄影响这里
+  "compatibility_date": "2025-09-01",
+
+  // 不是秘密的配置,明文写在这里。
+  // 秘密的(DEEPSEEK_API_KEY、DEV_TOKEN)不许写在这个文件里,用 `npx wrangler secret put` 设。
+  "vars": {
+    "UPSTREAM_URL": "https://api.deepseek.com/chat/completions",
+    "MODEL": "deepseek-chat"
+  },
+
+  // 两个限流器(代码里的 env.PER_INSTALL / env.PER_IP)。
+  // period 只能是 10 或 60 秒。namespace_id 是自己起的编号,账号内不重复就行。
+  "ratelimits": [
+    {
+      // 一台设备一分钟 30 次。正常用最猛的时候:断网一周回来一次补 7 颗蛋 + 1 次关怀,
+      // 或者聊天每轮 3 次(提炼检索词 + 重排 + 回复),都远低于这个数
+      "name": "PER_INSTALL",
+      "namespace_id": "1001",
+      "simple": { "limit": 30, "period": 60 }
+    },
+    {
+      // 一个 IP 一分钟 60 次。比单设备宽,因为同一个 Wi-Fi / 运营商 NAT 后面可能有好几个用户
+      "name": "PER_IP",
+      "namespace_id": "1002",
+      "simple": { "limit": 60, "period": 60 }
+    }
+  ]
+}

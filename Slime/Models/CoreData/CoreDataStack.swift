@@ -24,8 +24,8 @@ nonisolated enum StoreMode {
         if ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil {
             return .inMemory
         }
-        if ProcessInfo.processInfo.arguments.contains("-UseTestStore")
-        {
+        // 启动参数统一在 LaunchOptions 里解析（上面那条 XCTest 是环境变量，不是用户开关，留在这）
+        if LaunchOptions.current.useTestStore {
             return .testFile
         }
         #endif

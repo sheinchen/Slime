@@ -13,7 +13,6 @@ final class ChatViewModel {
     //MARK: - 依赖与状态
     private let origin: ChatOrigin
     private let chatRepo: ChatRepository
-    private let posts: PostRepository
     private let aiService: AIService
 
     /// 可选：向量模型加载失败时它是 nil，聊天照常，只是母鸡不会提起旧事。
@@ -38,20 +37,16 @@ final class ChatViewModel {
     
     init(origin: ChatOrigin,
          chatRepo: ChatRepository,
-         posts: PostRepository,
          aiService: AIService,
          recall: RecallService? = nil) {
         self.origin = origin
         self.chatRepo = chatRepo
-        self.posts = posts
         self.aiService = aiService
         self.recall = recall
-        
+
         switch origin {
         case .direct:
             messages = [ChatMessageItem(id: UUID(), role: .slime, content: HenGreeting.random(), createdAt: Date())]
-        case .care(let care):
-            messages = [ChatMessageItem(id: UUID(), role: .slime, content: care.text, createdAt: Date())]
         case .resume(let existing):
             session = existing
             messages = chatRepo.messages(sessionId: existing.id)
@@ -62,20 +57,16 @@ final class ChatViewModel {
     @discardableResult
     private func ensureSession() -> ChatSessionInfo {
         if let session { return session }
-        let created = chatRepo.createSession(careMessageId: newSessionCareId, now: Date())
+        // 没有「从关怀卡片进来的会话」了（卡片纯只读），careMessageId 一律空着。
+        // 字段是库里的列，留着不迁移。
+        let created = chatRepo.createSession(careMessageId: nil, now: Date())
         session = created
         for m in messages {
             chatRepo.append(sessionId: created.id, role: m.role, content: m.content, at: m.createdAt)
         }
         return created
     }
-    
-    //判断新会话是不是主动关心会话
-    private var newSessionCareId: UUID? {
-        if case .care(let care) = origin { return care.id }
-        return nil
-    }
-    
+
     //MARK: - 对外动作
     func send(_ text: String, onDelta: @MainActor @escaping () -> Void) async throws -> ChatMessageItem {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -186,7 +177,7 @@ final class ChatViewModel {
     
     
     
-    /// 按固定顺序组装:①人设+行为约束 ②触发语境 ③最近 N 轮历史(含刚发的用户消息)
+    /// 按固定顺序组装:①人设+行为约束（有想起来的旧事就接在后面） ②最近 N 轮历史(含刚发的用户消息)
     private func buildContext() -> [AIChatMessage] {
         var result: [AIChatMessage] = []
         
@@ -204,8 +195,7 @@ final class ChatViewModel {
     }
     
     private func systemContext() -> String {
-        var parts = [DeepSeekAIService.chatSystemPrompt]
-        if case .care(let care) = origin { parts.append(triggerContext(care)) }
+        var parts = [ChatPrompt.system]
         if !recalled.isEmpty { parts.append(memoryContext(recalled)) }
         return parts.joined(separator: "\n\n")
     }
@@ -242,28 +232,5 @@ final class ChatViewModel {
                当成你自己记得的，不要说出日期，也不要说「你写过」「我看到」「记录里」，那像在查档案，不像朋友。
                """
     }
-    
-    /// 触发语境:这次关心的开场白 + 触发时用户的那几篇帖子(内容+情绪)。
-    /// 帖子按"创建时间 ≤ 关心创建时间"查最近 3 篇 —— 正是触发那一刻规则看到的窗口。
-    private func triggerContext(_ care: PendingCare) -> String {
-        let window = posts.fetchAll().filter {
-            $0.createdAt <= care.createdAt
-        }.prefix(3)
-        
-        let postLines = window.map { post in
-            // 没被 AI 读过的那篇不带标签。post.emotion 是可选的 ——
-            // 直接插值编译器只报警告，运行起来会变成 [Optional("sad")] 塞进 prompt
-            let tag = post.emotion.map { "[\($0)] " } ?? ""
-            return "- \(tag)\(post.content.prefix(60))"
-        }.joined(separator: "\n")
-        
-        return """
-               [背景,只有你自己知道,绝不原样复述给用户]
-               你之前主动对用户说了:「\(care.text)」,用户点开并接受了,于是有了这次对话。
-               你当时想关心 ta,是因为 ta 最近写了这些(方括号是当时的情绪):
-               \(postLines)
-               对话要接得住这个语境:你知道 ta 最近的状态,自然地延续那句开场白,不要从"你好呀"重新开始,也不要机械重复开场白。
-               """
-    }
-    
+
 }

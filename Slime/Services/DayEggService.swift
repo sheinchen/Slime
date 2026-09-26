@@ -45,15 +45,19 @@ final class DayEggService {
     /// 已经在路上的今日总结请求，连同它是基于哪几篇日记发的。prefetch 存进来，finish 取走。
     private var todayTask: (basis: [UUID], task: Task<DayEggSummary, Error>)?
 
-    /// 默认参数表达式是在「非隔离」上下文里求值的，没法在那儿 new 主线程隔离的类型。
-    /// 所以默认值给 nil，真正的构造放进 init 体内 —— 这里才是 @MainActor 的。
-    init(posts: PostRepository? = nil,
-         eggs: DayEggStore? = nil,
-         summarizer: DayEggSummarizing? = nil,
+    /// 依赖全部必填，**不给默认值**（09-25 去掉的）。
+    ///
+    /// 它有状态（正在孵的天、在路上的预取、重试冷却），「组合根只建一个」是正确性的前提 ——
+    /// 第二个实例的防重入跟第一个互不相识，同一天会被孵两次。以前三个依赖都有默认值，
+    /// 随手写一句 `DayEggService()` 就能悄悄多出一个，而且那个实例直连真 AI，`-StubAI` 管不到它。
+    /// `calendar` 是个值、没有状态，留着默认。
+    init(posts: PostRepository,
+         eggs: DayEggStore,
+         summarizer: DayEggSummarizing,
          calendar: Calendar = .current) {
-        self.posts = posts ?? CoreDataPostRepository()
-        self.eggs = eggs ?? CoreDataDayEggStore()
-        self.summarizer = summarizer ?? DeepSeekAIService()
+        self.posts = posts
+        self.eggs = eggs
+        self.summarizer = summarizer
         self.calendar = calendar
     }
 
@@ -71,13 +75,12 @@ final class DayEggService {
         let today = calendar.startOfDay(for: now)
         guard let earliest = calendar.date(byAdding: .day, value: -days, to: today) else { return 0 }
 
-        // 库只查一次，别在循环里反复查
-        let byDay = grouped()
+        // 库只查一次，别在循环里反复查。日记和蛋用同一个窗口，一一对得上
+        let byDay = posts.entriesByDay(from: earliest, before: today)
         let eggMap = eggs.eggs(from: earliest, before: today)
 
         // 从早到晚补，时间线才不会中间留洞
         let pending = byDay.keys
-            .filter { $0 >= earliest && $0 < today }
             .filter { EggDebt.owes(latestEntryAt: byDay[$0]?.last?.createdAt, egg: eggMap[$0]) }
             .sorted()
 
@@ -102,7 +105,8 @@ final class DayEggService {
     /// 不能直接拿到这个旧的失败、白白「没孵出来」一次。
     func prefetchToday(now: Date = Date()) {
         let today = calendar.startOfDay(for: now)
-        guard let entries = grouped()[today], !entries.isEmpty,
+        let entries = posts.entries(on: today)
+        guard !entries.isEmpty,
               EggDebt.owes(latestEntryAt: entries.last?.createdAt, egg: eggs.egg(for: today))
         else {
             dropTodayTask()                    // 今天没什么可孵的，手上那份也不该留
@@ -139,7 +143,7 @@ final class DayEggService {
         // 蛋会漏掉新写的 / 带着删掉的内容，而且蛋比日记新，EggDebt 判不欠，再也补不回来。
         // 所以落库前再对一次「基于哪几篇」，对不上就按现在的日记重孵（重新走一遍本函数）。
         let today = calendar.startOfDay(for: now)
-        guard grouped()[today]?.map(\.id) == current.basis else {
+        guard posts.entries(on: today).map(\.id) == current.basis else {
             return try await finishToday(now: now)
         }
         eggs.save(text: summary.text, emotion: summary.emotion, for: today)
@@ -163,8 +167,9 @@ final class DayEggService {
     /// 今天不补 —— 今天的蛋永远是用户按母鸡按出来的。
     /// - Returns: 补成功了没有。调用方据此决定要不要再刷一次界面。
     func rehatch(_ day: Date, now: Date = Date()) async -> Bool {
-        guard day < calendar.startOfDay(for: now),
-              let entries = grouped()[day], !entries.isEmpty else { return false }
+        guard day < calendar.startOfDay(for: now) else { return false }
+        let entries = posts.entries(on: day)
+        guard !entries.isEmpty else { return false }
         // 用户刚动手删的，不受 30 秒重试冷却限制
         return await hatch(day, entries: entries, respectsCooldown: false)
     }
@@ -197,22 +202,6 @@ final class DayEggService {
         } catch {
             return false
         }
-    }
-
-    /// 全部日记按天归堆，每堆按时间升序。
-    private func grouped() -> [Date: [SlimeItem]] {
-        let items = posts.fetchAll().map {
-            SlimeItem(id: $0.id, content: $0.content, createdAt: $0.createdAt,
-                      emotion: $0.slimeEmotion,
-                      reply: $0.reply, dayKey: $0.dayKey)
-        }
-        var byDay = Dictionary(grouping: items) {
-            $0.dayKey ?? calendar.startOfDay(for: $0.createdAt)
-        }
-        for (day, list) in byDay {
-            byDay[day] = list.sorted { $0.createdAt < $1.createdAt }
-        }
-        return byDay
     }
 
     enum EggError: Error {

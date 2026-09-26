@@ -112,7 +112,7 @@ final class RootTabBarController: UITabBarController {
     }
 
     /// 数据在别处变了（补蛋、关怀落库），通知每一页重读。
-    /// SceneDelegate 的 onAppActive 里用。
+    /// 回到前台（AppOpenFlow）、跨零点、写完日记关页面时用。
     func broadcastDataChange() {
         forEachLoadedPage { page, _ in
             page.dataDidChange()

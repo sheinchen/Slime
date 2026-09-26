@@ -67,7 +67,6 @@ final class SquareViewModel {
 
     // MARK: - 状态
 
-    private var items: [SlimeItem] = []
     private var grouped: [Date: [SlimeItem]] = [:]
     private var eggs: [Date: DayEggRecord] = [:]
 
@@ -118,16 +117,19 @@ final class SquareViewModel {
         EggDebt.owes(latestEntryAt: grouped[day]?.last?.createdAt, egg: eggs[day])
     }
 
-    /// 默认值给 nil、构造放进 init 体内：默认参数表达式是非隔离的，
-    /// 在那里 new 主线程隔离的类型会报错。
-    init(repository: PostRepository? = nil,
-         eggStore: DayEggStore? = nil,
-         eggService: DayEggService? = nil,
+    /// 依赖全部必填，只有「值」留默认（日历、现在几点）—— 规则见 CLAUDE.md §5「依赖只从组合根来」。
+    ///
+    /// 以前三个依赖都有默认值。`eggService` 那个最危险：随手 `SquareViewModel()` 就会自己建一个
+    /// 新的 DayEggService，跟组合根那个各管各的防重入。而且组合根自己都漏传过 ——
+    /// 09-25 之前 SceneDelegate 没传 `eggStore`，这里悄悄用默认值另建了一个，编译器一声不吭。
+    init(repository: PostRepository,
+         eggStore: DayEggStore,
+         eggService: DayEggService,
          calendar: Calendar = .current,
          now: @escaping () -> Date = { Date() }) {
-        self.repository = repository ?? CoreDataPostRepository()
-        self.eggStore = eggStore ?? CoreDataDayEggStore()
-        self.eggService = eggService ?? DayEggService()
+        self.repository = repository
+        self.eggStore = eggStore
+        self.eggService = eggService
         var cal = calendar
         cal.firstWeekday = 1
         self.calendar = cal
@@ -138,21 +140,10 @@ final class SquareViewModel {
 
     // MARK: - 读数据
 
+    /// 按天归堆、每堆按时间排好，都是仓库做的 —— 这里拿来就用。
+    /// （以前这里自己把 Post 转成 SlimeItem、自己归堆，跟 DayEggService 里那份几乎逐行相同。）
     func loadPosts() {
-        items = repository.fetchAll().map { post in
-            SlimeItem(id: post.id, content: post.content, createdAt: post.createdAt,
-                      emotion: post.slimeEmotion,
-                      reply: post.reply, dayKey: post.dayKey)
-        }
-
-        // 日记按日期归堆
-        grouped = Dictionary(grouping: items) {
-            $0.dayKey ?? calendar.startOfDay(for: $0.createdAt)
-        }
-        // 每堆按时间顺序
-        for (day, list) in grouped {
-            grouped[day] = list.sorted { $0.createdAt < $1.createdAt }
-        }
+        grouped = repository.allEntriesByDay()
         rebuildWeeks()
     }
 
@@ -191,7 +182,7 @@ final class SquareViewModel {
     /// 删一篇日记，并让那天的蛋作废。同步 —— 返回时蛋已经没了。
     /// 「删日记蛋要作废」这条规则在 DayEggService 里，VM 只转发。
     func delete(_ item: SlimeItem) {
-        let day = dayKey(of: item)
+        let day = item.day
         // 过去的天、删完还剩日记 → 马上要重孵。先标上，下面这次 loadPosts 就画成过渡蛋。
         // （grouped 这会儿还没刷新，里面还算着要删的这篇，所以是 > 1）
         // 今天不标：今天的蛋要用户自己按母鸡，删完就是回到母鸡
@@ -207,18 +198,13 @@ final class SquareViewModel {
     /// - Returns: 界面要不要再刷一次。成功（新蛋回来了）和失败（撤掉过渡蛋、画回「还在孵」）都要；
     ///   今天、删光了的天没标过过渡蛋，什么都没变。
     func rehatchAfterDelete(_ item: SlimeItem) async -> Bool {
-        let day = dayKey(of: item)
+        let day = item.day
         guard rehatching.contains(day) else { return false }
         // 成败都一样处理：撤掉标记重读一遍。成功读到新蛋，失败读到「没蛋」→ 画回「还在孵」
         _ = await eggService.rehatch(day)
         rehatching.remove(day)
         loadPosts()                      // loadPosts → rebuildWeeks 会重读蛋、重算标记
         return true
-    }
-
-    /// 跟 grouped 的归堆口径保持一致
-    private func dayKey(of item: SlimeItem) -> Date {
-        item.dayKey ?? calendar.startOfDay(for: item.createdAt)
     }
 
     // MARK: - 组装周条
@@ -254,8 +240,9 @@ final class SquareViewModel {
             return
         }
 
-        // fetchAll 是 createdAt 降序（PostRepository:46），所以 last 是最早的一篇
-        let earliest = items.last.map { $0.dayKey ?? calendar.startOfDay(for: $0.createdAt) } ?? today
+        // 最早写过日记的那天。以前靠「fetchAll 是降序、所以 last 最早」这个隐含约定，
+        // 仓库一改排序就悄悄错；现在直接取最小的那个 key
+        let earliest = grouped.keys.min() ?? today
         let monthStart = calendar.dateInterval(of: .month, for: earliest)?.start ?? earliest
         let firstStart = calendar.dateInterval(of: .weekOfYear, for: monthStart)?.start ?? thisWeek.start
 

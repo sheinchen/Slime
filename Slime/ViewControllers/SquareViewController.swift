@@ -447,7 +447,7 @@ extension SquareViewController: RootPage {
     func pageVisibilityDidChange(isCurrent: Bool) {
         // 空的：pager 时代切页不走 viewWillAppear，所以要靠这个回调刷新；
         // 换成 UITabBarController 之后切页会正常走 viewWillAppear，那边已经做全了。
-        // 在这儿再刷一次只是白跑一遍 fetchAll。
+        // 在这儿再刷一次只是白跑一遍全量查询。
     }
     
     /// 先对一下日子。
