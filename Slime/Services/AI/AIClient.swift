@@ -43,11 +43,18 @@ final class AIClient {
     /// 开发者通行证：带上它中转不限流。**只有 eval 测试会传**（重排 eval 并发 4 路，一分钟上百次），
     /// App 里永远是 nil —— 通行证要是进了 App，就跟以前的 key 一样人人都拿得到。
     private let devToken: String?
+    /// 现在能不能往外发。每发一次都现问 —— 用户可能刚在设置里撤回了同意。
+    /// AIClient 不知道「同意」是什么，它只认这一个是非题；规则在 AIConsent 里。
+    private let isSendingAllowed: () -> Bool
 
-    /// 参数都有默认值，平时直接 `AIClient()`。能注入是为了测试：指向本地假服务器、带通行证。
-    init(baseURL: String = AIConfig.baseURL,
+    /// `isSendingAllowed` 必填、没有默认值：放行与否必须由调用方明说，
+    /// 不能因为漏传一个参数就悄悄放行（App 里传同意状态，eval 传 `{ true }`）。
+    /// 其余参数有默认值，能注入是为了测试：指向本地假服务器、带通行证。
+    init(isSendingAllowed: @escaping () -> Bool,
+         baseURL: String = AIConfig.baseURL,
          installID: String = AIConfig.installID,
          devToken: String? = nil) {
+        self.isSendingAllowed = isSendingAllowed
         self.baseURL = baseURL
         self.installID = installID
         self.devToken = devToken
@@ -143,6 +150,10 @@ final class AIClient {
                              temperature: Double,
                              stream: Bool,
                              patience: Patience) throws -> URLRequest {
+        // 同意这道闸放在这里：三种调用（JSON / 文本 / 流式）都要经过 makeRequest，
+        // 所以不管哪个页面、哪条流程出了 bug，没同意时一个字节都出不了手机
+        guard isSendingAllowed() else { throw AIError.notAllowed }
+
         // 路径跟 DeepSeek 的一样，中转只认这一个
         var request = URLRequest(url: URL(string: baseURL + "/chat/completions")!)
         request.httpMethod = "POST"

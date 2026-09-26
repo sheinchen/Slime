@@ -50,16 +50,20 @@ final class HomeViewController: UIViewController {
     /// 写日记页的工厂。参数：背景截图、关掉时的回调
     private let makeCompose: (_ backdrop: UIImage?, _ onClose: @escaping () -> Void) -> UIViewController
     private let makeChat: () -> UIViewController
+    /// 设置页的工厂。返回的是设置页本身，外面那层导航由这里套（导航栏是「弹出来」这件事的一部分）
+    private let makeSettings: () -> UIViewController
 
     /// 以前这三样是可选属性（`var careViewModel: CareViewModel?`），组合根建完再一个个赋值。
     /// 漏赋一行不报错、不崩 —— 关怀卡片就永远不出现，点鸟巢也没反应。
     /// 改成 init 注入之后，少传一个就编译不过（09-25）。
     init(viewModel: HomeViewModel,
          makeCompose: @escaping (_ backdrop: UIImage?, _ onClose: @escaping () -> Void) -> UIViewController,
-         makeChat: @escaping () -> UIViewController) {
+         makeChat: @escaping () -> UIViewController,
+         makeSettings: @escaping () -> UIViewController) {
         self.viewModel = viewModel
         self.makeCompose = makeCompose
         self.makeChat = makeChat
+        self.makeSettings = makeSettings
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -147,6 +151,40 @@ final class HomeViewController: UIViewController {
                 // 设计稿是距屏幕顶 104，安全区顶大约 59，剩下的差额补在这里
                 stack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 45),
             ])
+
+            setupSettingsButton()
+        }
+
+        /// 右上角的齿轮 → 设置页。跟日期那行齐平，颜色和「巢是空的」那行小字一样淡 ——
+        /// 它是个「知道在哪就行」的入口，不该抢日期的风头。
+        private func setupSettingsButton() {
+            let button = UIButton(type: .system)
+            button.setImage(UIImage(systemName: "gearshape",
+                                    withConfiguration: UIImage.SymbolConfiguration(pointSize: 19, weight: .regular)),
+                            for: .normal)
+            button.tintColor = Sky.ink(0.42)
+            button.accessibilityLabel = "设置"
+            button.addTarget(self, action: #selector(openSettings), for: .touchUpInside)
+            view.addSubview(button)
+
+            button.snp.makeConstraints { make in
+                // 44×44 是能稳稳点中的最小尺寸；图标本身只有 19，四周是透明的点击区
+                make.size.equalTo(44)
+                // 图标右沿对齐页面 34 的边距（点击区往外多出 12）
+                make.trailing.equalToSuperview().inset(22)
+                make.centerY.equalTo(dateLabel)
+            }
+            // 日期再长也不许压到齿轮上
+            dateLabel.snp.makeConstraints { make in
+                make.trailing.lessThanOrEqualTo(button.snp.leading).offset(-4)
+            }
+        }
+
+        @objc private func openSettings() {
+            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+            dismissCare()          // 跟去写日记、去聊天一样，卡片让路
+            // 默认的 pageSheet：往下一拉就能关，底下还露着一点首页 —— 设置是「顺手看一眼」的地方
+            present(UINavigationController(rootViewController: makeSettings()), animated: true)
         }
         
         #if DEBUG

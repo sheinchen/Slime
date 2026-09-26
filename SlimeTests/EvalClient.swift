@@ -22,7 +22,9 @@ import Foundation
 @MainActor
 enum EvalClient {
     static func make() -> AIClient {
-        AIClient(devToken: devToken)
+        // eval 是开发者自己在测，不经过同意页 —— 闸门直接放行。
+        // 不能读 App 的同意状态：那是这台模拟器上的 UserDefaults，没点过同意 eval 就会全部 notAllowed
+        AIClient(isSendingAllowed: { true }, devToken: devToken)
     }
 
     /// 读不到就是 nil。eval 开头会断言它不是 nil —— 早失败好过跑一半被限流、结果悄悄算错。

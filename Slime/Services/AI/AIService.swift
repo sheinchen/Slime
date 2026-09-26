@@ -28,6 +28,8 @@ struct AIChatMessage {
 enum AIError: Error {
     case badStatus
     case emptyContent
+    /// 用户还没同意把内容交给 AI（或者撤回了）。请求**根本没发出去**，见 AIClient.makeRequest
+    case notAllowed
 }
 
 protocol AIService {

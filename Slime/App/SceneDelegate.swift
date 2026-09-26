@@ -23,6 +23,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     private var openFlow: AppOpenFlow?
     private weak var rootVC: RootTabBarController?
 
+    /// 用户同不同意把内容交给 AI。没同意 = 用不了 App，根页面是同意页
+    private var consent: AIConsentStore?
+    /// 主界面（tab 那一套）。同意之后才挂到窗口上；撤回时换下来，但对象留着 ——
+    /// 重新同意时直接换回来，不用把所有页面重建一遍
+    private var mainUI: UIViewController?
+
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         // scene 是一个 UIWindowScene(带屏幕的场景),转型失败就不往下走
         guard let windowScene = (scene as? UIWindowScene) else { return }
@@ -37,11 +43,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         let careMessages = CoreDataCareMessageStore()
         let careChecks = CoreDataCareCheckStore()
         let chatRepo = CoreDataChatRepository()
+        let consent = UserDefaultsAIConsentStore()
+        self.consent = consent
 
         // MARK: AI
 
         // 五个能力各一个实现，共用同一个 AIClient（唯一发请求的地方，接后端中转只改它）
-        let aiClient = AIClient()
+        // 闸门每次发请求都现问一遍同意状态 —— 撤回之后，已经建好的这些能力也立刻发不出去
+        let aiClient = AIClient(isSendingAllowed: { consent.hasConsented })
         let realCare   = CareDecider(client: aiClient)
         let realEgg    = DayEggSummarizer(client: aiClient)
         let realChat   = HenChatService(client: aiClient)
@@ -113,7 +122,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         let homeVC = HomeViewController(viewModel: HomeViewModel(messages: careMessages, eggs: eggStore),
                                         makeCompose: makeCompose,
-                                        makeChat: makeChat)
+                                        makeChat: makeChat,
+                                        makeSettings: { [weak self] in
+                                            SettingsViewController(onWithdraw: { self?.withdrawConsent() })
+                                        })
         let squareVM = SquareViewModel(repository: postRepo, eggStore: eggStore, eggService: eggService)
 
         // 图标先用 SF Symbols 占位 —— 换成自己的 icon 时只改这三个名字。
@@ -142,7 +154,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             backfillIndex: backfill,
             refreshPages: refreshAllPages)
 
-        window.rootViewController = UINavigationController(rootViewController: rootVC)
+        mainUI = UINavigationController(rootViewController: rootVC)
 
         #if DEBUG
         // 按启动参数播种（每一幕是干什么的见 LaunchOptions.Seed）。只在测试库上生效，正式库会被挡掉
@@ -151,9 +163,15 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         }
         #endif
 
-        // 让 window 显示出来,并持有它(存到属性里,不然会被释放)
-        window.makeKeyAndVisible()
+        // 持有 window（存到属性里，不然会被释放）。要在挂根页面之前：showConsentPage 读的是 self.window
         self.window = window
+        // 没同意就先见同意页，主界面这时候根本不在窗口上
+        if consent.hasConsented {
+            window.rootViewController = mainUI
+        } else {
+            showConsentPage(animated: false)
+        }
+        window.makeKeyAndVisible()
 
         // 系统在零点（以及运营商校时、夏令时切换这类时间突变）时发这个通知，
         // 在主线程上发。用 selector 版本：闭包版本的回调不带主线程隔离，
@@ -189,7 +207,45 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// 放在 didBecomeActive 的话，每拉一次通知中心就跑一遍闸门、往 CareCheck 写一条
     /// 「没有新蛋」，debug 页的统计被这种噪声撑大。冷启动这里也会走，不用另外补。
     func sceneWillEnterForeground(_ scene: UIScene) {
+        // 没同意之前整条流程都不跑 —— 补蛋、关怀都要把日记发给 AI。
+        // AIClient 那道闸也挡得住，但被挡下的补蛋会记一次失败、30 秒内不重试：
+        // 用户读完同意页点「同意」时，那几天正卡在冷却里，要等下次回前台才孵得出来。
+        guard consent?.hasConsented == true else { return }
         openFlow?.enterForeground()
+    }
+
+    // MARK: - 同意页 ⇄ 主界面
+
+    /// 换整个根页面。同意页不是盖在主界面上的弹窗 —— 没同意时主界面根本不在窗口上，没有路能绕过去
+    private func setRoot(_ viewController: UIViewController, animated: Bool) {
+        guard let window else { return }
+        guard animated else {
+            window.rootViewController = viewController
+            return
+        }
+        UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
+            window.rootViewController = viewController
+        }
+    }
+
+    private func showConsentPage(animated: Bool) {
+        setRoot(AIConsentViewController(onAgree: { [weak self] in self?.didAgree() }), animated: animated)
+    }
+
+    private func didAgree() {
+        consent?.grant()
+        if let mainUI {
+            setRoot(mainUI, animated: true)
+        }
+        // 冷启动那一轮被 sceneWillEnterForeground 的守卫跳过了（那时还没同意），现在补跑：
+        // 欠的蛋孵上、关怀评估一次、向量补上
+        openFlow?.enterForeground()
+    }
+
+    /// 设置页已经先把自己收掉了才调到这里，所以主界面上面没有盖着东西，可以直接换
+    private func withdrawConsent() {
+        consent?.withdraw()
+        showConsentPage(animated: true)
     }
 
     /// 开着 App 跨过零点。
