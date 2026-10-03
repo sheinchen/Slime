@@ -14,3 +14,10 @@ build/
 relay/node_modules/
 relay/.wrangler/
 relay/.dev.vars
+
+# 跟项目无关的本地文件(课程作业、工具临时目录、Office 锁文件)
+.codex_work/
+.codex-finalizer/
+output/
+docs:/
+~$*
