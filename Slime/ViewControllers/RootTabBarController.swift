@@ -23,8 +23,15 @@ extension RootPage {
 
 final class RootTabBarController: UITabBarController {
 
+    /// 图标先用 SF Symbols 占位 —— 换成自己的 icon 时只改这几个名字。
+    /// 放在这里而不是组合根里：正式的主界面和示范教程各建一套 tab，两边得长得一样
+    static let pageIcons = ["house.fill", "calendar"]
+    static let accessoryIcon = "bubble.left.fill"
+
     /// 右边那个圆点了做什么。它**不是 tab**，是个动作入口，去哪由组合根决定
     var onAccessoryTap: (() -> Void)?
+    /// 用户点 tab 切了页（参数是第几页）。示范教程靠它知道「点了日历」
+    var onPageChange: ((Int) -> Void)?
 
     private let floatingBar: FloatingTabBar
 
@@ -57,6 +64,7 @@ final class RootTabBarController: UITabBarController {
             guard let self else { return }
             self.selectedIndex = index
             self.notifyPageVisibility()
+            self.onPageChange?(index)
         }
         floatingBar.onAccessoryTap = { [weak self] in
             self?.onAccessoryTap?()

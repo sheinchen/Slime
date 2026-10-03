@@ -6,6 +6,15 @@
   // 运行时的行为版本。锁住它,Cloudflare 以后改默认行为也不会悄悄影响这里
   "compatibility_date": "2025-09-01",
 
+  // 静态页面:public/ 下的文件直接发出去,**不经过 src/index.ts**。
+  // 现在两页:public/privacy.html → /privacy(隐私政策)、public/support.html → /support(支持页)
+  // (默认的 html_handling 会把 /privacy 对到 privacy.html,链接里不用写 .html)
+  // 请求先看 public/ 里有没有对应的文件,没有才轮到 index.ts,所以 /chat/completions 不受影响。
+  // 不单独开个网站:App Store Connect 要一个长期可访问的地址,跟中转放一起就少维护一个部署。
+  "assets": {
+    "directory": "./public"
+  },
+
   // 不是秘密的配置,明文写在这里。
   // 秘密的(DEEPSEEK_API_KEY、DEV_TOKEN)不许写在这个文件里,用 `npx wrangler secret put` 设。
   "vars": {

@@ -49,7 +49,6 @@ final class HomeViewController: UIViewController {
     private let viewModel: HomeViewModel
     /// 写日记页的工厂。参数：背景截图、关掉时的回调
     private let makeCompose: (_ backdrop: UIImage?, _ onClose: @escaping () -> Void) -> UIViewController
-    private let makeChat: () -> UIViewController
     /// 设置页的工厂。返回的是设置页本身，外面那层导航由这里套（导航栏是「弹出来」这件事的一部分）
     private let makeSettings: () -> UIViewController
 
@@ -58,11 +57,9 @@ final class HomeViewController: UIViewController {
     /// 改成 init 注入之后，少传一个就编译不过（09-25）。
     init(viewModel: HomeViewModel,
          makeCompose: @escaping (_ backdrop: UIImage?, _ onClose: @escaping () -> Void) -> UIViewController,
-         makeChat: @escaping () -> UIViewController,
          makeSettings: @escaping () -> UIViewController) {
         self.viewModel = viewModel
         self.makeCompose = makeCompose
-        self.makeChat = makeChat
         self.makeSettings = makeSettings
         super.init(nibName: nil, bundle: nil)
     }
@@ -109,13 +106,6 @@ final class HomeViewController: UIViewController {
             self.setCovered(true)
             self.present(composeVC, animated: true)
 
-        }
-      
-        island.onHenTap = { [weak self] in
-            UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-            guard let self else { return }
-            self.dismissCare()
-            self.present(self.makeChat(), animated: true)
         }
         
     }

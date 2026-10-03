@@ -70,9 +70,9 @@ final class CoreDataCareCheckStore: CareCheckStore {
         return ((try? context.fetch(request)) ?? []).map { CareCheckRecord($0)}
     }
 
+    /// 存不上就撤回（见 `saveOrRollback`）。这一条没记上，闸门的「上次检查」还停在上一次，下次打开会再评估一遍 —— 无害
     private func saveIfNeeded() {
-        guard context.hasChanges else { return }
-        do { try context.save() } catch { print("检查日志保存失败: \(error)") }
+        do { try context.saveOrRollback() } catch { print("检查日志保存失败，已撤回: \(error)") }
     }
 }
 

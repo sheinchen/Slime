@@ -20,9 +20,10 @@ final class RecallVectorEvalTests: XCTestCase {
     private let now = Date(timeIntervalSince1970: 1_700_000_000)
 
     func test_三路对比eval() throws {
-        let embedder: TextEmbedder
+        // 模型第一次编码时才加载（见 TextEmbedder），所以拿第一次编码来检查它在不在
+        let embedder = TextEmbedder()
         do {
-            embedder = try TextEmbedder()
+            _ = try embedder.embed("检查模型能不能加载")
         } catch {
             throw XCTSkip("模型或词表没打进 bundle：\(error)")
         }

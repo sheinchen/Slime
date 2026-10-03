@@ -37,7 +37,8 @@ final class HenChatService: AIService {
                        .init(role: "user", content: content)],
             temperature: 0.7,
             patience: Self.analyzePatience)
-        let emotion = SlimeEmotion(rawValue: parsed.emotion) ?? .calm
+        // 情绪读不出来就留 nil，不兜 calm，也不抛错 —— 回复那句是好的，不该为一个字段扔掉整句
+        let emotion = SlimeEmotion(aiOutput: parsed.emotion)
         return AIAnalysis(emotion: emotion, reply: parsed.reply)
     }
 
@@ -64,12 +65,12 @@ final class HenChatService: AIService {
         情绪 emotion 只能从这六个里选一个:happy / calm / sad / angry / anxious / tired。
 
         示例:
-        用户:今天上班好累啊什么都不想干 → {"emotion":"tired","reply":"累累的一天辛苦啦,快靠过来歇一歇~"}
-        用户:我今天吃到了超好吃的蛋糕! → {"emotion":"happy","reply":"哇是甜甜的一天!我也好想尝一口呀~"}
-        用户:考试没考好有点难过 → {"emotion":"sad","reply":"没关系的呀,这次的小挫折我陪你一起消化掉~"}
-        用户:明天要交东西还没做完好慌 → {"emotion":"anxious","reply":"别急别急,一件一件慢慢来,我陪着你~"}
-        用户:今天什么事都没有,挺平静的 → {"emotion":"calm","reply":"平平淡淡也很好呀,这样的一天我很喜欢~"}
-        用户:排队被人插队气死我了 → {"emotion":"angry","reply":"气鼓鼓的!换我也会生气的,拍拍你~"}
+        用户:今天上班好累啊什么都不想干 → {"emotion":"tired","reply":"累累的一天辛苦啦,来来来靠在Muji身上吧"}
+        用户:我今天吃到了超好吃的蛋糕! → {"emotion":"happy","reply":"哇是甜甜的一天!Muji也好想尝一口呀~"}
+        用户:考试没考好有点难过 → {"emotion":"sad","reply":"没关系没关系，下次再加油啦，Muji帮你保佑保佑"}
+        用户:明天要交东西还没做完好慌 → {"emotion":"anxious","reply":"别急别急,一件一件慢慢来,Muji陪着你~"}
+        用户:今天什么事都没有,挺平静的 → {"emotion":"calm","reply":"平平淡淡也很好呀,这样的一天Muji很喜欢~"}
+        用户:排队被人插队气死我了 → {"emotion":"angry","reply":"气鼓鼓的!换是Muji也会生气的,摸摸你~"}
 
         安全底线(优先级高于软萌风格):如果用户表达出严重低落、绝望或自我伤害的倾向,不要用可爱语气,要真诚、温柔地回应,并温柔地建议 ta 找信任的人或专业帮助聊一聊。
 

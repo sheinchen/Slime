@@ -5,11 +5,14 @@
 
 import UIKit
 import SnapKit
+import SafariServices
 
 /// 设置页。入口在首页右上角的齿轮。
 ///
-/// 现在只有一行「撤回 AI 授权」—— 审核规则 5.1.1(ii) 要求 App 里有**容易找到、看得懂**的撤回同意方式。
-/// 以后隐私政策、开源致谢、求助入口也都放这里，加一个 Section / Item 就行。
+/// 两行，都是审核规则要求 App 里必须有的：
+/// · 撤回 AI 授权 —— 5.1.1(ii)：要有**容易找到、看得懂**的撤回同意方式
+/// · 隐私政策 —— 5.1.1(i)：App 里要有隐私政策的链接，而且容易找到
+/// 以后开源致谢、求助入口也放这里，加一个 Section / Item 就行。
 ///
 /// 跟同意页一样**只负责显示**：撤回之后存哪、换哪个页面，是组合根的事，这里只通过 `onWithdraw` 报告。
 final class SettingsViewController: UIViewController {
@@ -17,10 +20,12 @@ final class SettingsViewController: UIViewController {
     // Diffable 的标识要求 Sendable；工程默认主线程隔离，所以这两个枚举要显式 nonisolated（同 ChatViewController）
     private enum Section: nonisolated Hashable {
         case ai
+        case about
     }
 
     private enum Item: nonisolated Hashable {
         case withdrawConsent
+        case privacyPolicy
     }
 
     private let onWithdraw: () -> Void
@@ -77,6 +82,12 @@ final class SettingsViewController: UIViewController {
                 content.text = "撤回 AI 授权"
                 // 冠子的红：是个「要想一下再点」的动作，但不是删东西，不用系统那种刺眼的红
                 content.textProperties.color = Palette.comb
+                cell.accessories = []
+            case .privacyPolicy:
+                content.text = "隐私政策"
+                content.textProperties.color = Sky.ink
+                // 右边的小箭头：告诉人「点了会去另一页」
+                cell.accessories = [.disclosureIndicator(options: .init(tintColor: Sky.ink(0.3)))]
             }
             content.textProperties.font = AppFont.font(17)
             cell.contentConfiguration = content
@@ -93,7 +104,9 @@ final class SettingsViewController: UIViewController {
             var content = UIListContentConfiguration.groupedFooter()
             switch section {
             case .ai:
-                content.text = "撤回之后，母鸡不再把任何内容发给 AI，App 会回到同意页。日记、蛋和聊天记录都还留在这台手机上，重新同意就能接着用。"
+                content.text = "撤回之后，母鸡不再把任何内容发给 AI，App 会回到同意页。日记和蛋都还留在这台手机上，重新同意就能接着用。"
+            case .about:
+                content.text = nil
             }
             content.textProperties.font = AppFont.font(14)
             content.textProperties.color = Sky.ink(0.45)
@@ -111,8 +124,9 @@ final class SettingsViewController: UIViewController {
 
     private func applySnapshot() {
         var snapshot = NSDiffableDataSourceSnapshot<Section, Item>()
-        snapshot.appendSections([.ai])
+        snapshot.appendSections([.ai, .about])
         snapshot.appendItems([.withdrawConsent], toSection: .ai)
+        snapshot.appendItems([.privacyPolicy], toSection: .about)
         dataSource.apply(snapshot, animatingDifferences: false)
     }
 
@@ -120,6 +134,14 @@ final class SettingsViewController: UIViewController {
 
     @objc private func close() {
         dismiss(animated: true)
+    }
+
+    /// 用 App 内的 Safari（SFSafariViewController）打开，不跳出 App：看完点「完成」就回到设置页。
+    /// 它是系统提供的完整浏览器界面，自带地址栏和「完成」按钮，不用自己写网页容器。
+    private func openPrivacyPolicy() {
+        let safari = SFSafariViewController(url: AppLinks.privacyPolicy)
+        safari.preferredControlTintColor = Palette.beak
+        present(safari, animated: true)
     }
 
     /// 撤回前再确认一次：点了之后整个 App 会换成同意页，误触的代价不小。
@@ -148,6 +170,8 @@ extension SettingsViewController: UICollectionViewDelegate {
         switch item {
         case .withdrawConsent:
             confirmWithdraw()
+        case .privacyPolicy:
+            openPrivacyPolicy()
         }
     }
 }

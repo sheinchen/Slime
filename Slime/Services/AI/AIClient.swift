@@ -101,6 +101,10 @@ final class AIClient {
                     guard let http = response as? HTTPURLResponse,
                           (200..<300).contains(http.statusCode)
                     else { throw AIError.badStatus }
+                    // 「连接关了」不等于「话说完了」。只有模型自己报 finish_reason == "stop" 才算说完 ——
+                    // 没发 [DONE] 就断开、上游资源不足中断（insufficient_system_resource）、
+                    // 写到长度上限（length），循环都会正常退出，但手上拿的是半句。
+                    var finishReason: String?
                     // lines 负责把「网络包不一定是整句」拼成一行一行
                     for try await line in bytes.lines {
                         guard line.hasPrefix("data: ") else { continue }
@@ -108,10 +112,14 @@ final class AIClient {
                         if payload == "[DONE]" { break }             // 结束
                         guard let data = payload.data(using: .utf8),
                               let chunk = try? JSONDecoder().decode(StreamChunk.self, from: data),
-                              let piece = chunk.choices.first?.delta.content,
-                              !piece.isEmpty else { continue }
-                        continuation.yield(piece)
+                              let choice = chunk.choices.first else { continue }
+                        // 最后一片通常内容为空、只带 finish_reason，所以不能先按「内容为空」跳过
+                        if let reason = choice.finish_reason { finishReason = reason }
+                        if let piece = choice.delta?.content, !piece.isEmpty {
+                            continuation.yield(piece)
+                        }
                     }
+                    guard finishReason == "stop" else { throw AIError.incompleteStream }
                     continuation.finish()
                 } catch {
                     continuation.finish(throwing: error)
@@ -216,7 +224,9 @@ final class AIClient {
     private struct StreamChunk: Decodable {
         struct Choice: Decodable {
             struct Delta: Decodable { let content: String? }
-            let delta: Delta
+            let delta: Delta?
+            /// 只有最后一片有：stop = 说完了；length / insufficient_system_resource 等都是被掐断的
+            let finish_reason: String?
         }
         let choices: [Choice]
     }

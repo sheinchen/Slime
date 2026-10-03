@@ -17,14 +17,19 @@ import CoreData
 ///   依赖它的 Service 没法用一个普通数组去单测
 /// · 按一次母鸡要拉全表，只为了找今天那几篇
 ///
-/// 其它几个仓库（DayEggStore / CareMessageStore / ChatRepository）一直都是这么做的，这里补齐。
+/// 其它几个仓库（DayEggStore / CareMessageStore）一直都是这么做的，这里补齐。
 protocol PostRepository {
     /// 存一篇还没被 AI 读过的日记：情绪和回复先空着，等 `saveAnalysis` 补。
     /// 写日记是「先存后分析」—— 日记是用户的，不该等 AI 点头才落库。
+    ///
+    /// **存不进去会抛错**（最常见是手机存储满了），这时这篇不在库里、也不在内存里。
+    /// 全 App 只有这一处保存失败要让用户知道：别的失败（AI 的回复、蛋、关怀、聊天）都有地方补救或者无关紧要，
+    /// 只有「我写的字没存上」不能悄悄发生
     @discardableResult
-    func create(content: String) -> SlimeItem
+    func create(content: String) throws -> SlimeItem
     /// 给已经存下的那篇补上 AI 的分析。那篇已经不在了（被删了）就什么都不做。
-    func saveAnalysis(id: UUID, emotion: SlimeEmotion, reply: String)
+    /// `emotion` 为 nil = AI 回了话，但情绪词读不出来 —— 回复照存，情绪留空。
+    func saveAnalysis(id: UUID, emotion: SlimeEmotion?, reply: String)
 
     /// 某一天的日记，按写下的时间升序。
     func entries(on day: Date) -> [SlimeItem]
@@ -63,25 +68,27 @@ final class CoreDataPostRepository: PostRepository {
     }
 
     @discardableResult
-    func create(content: String) -> SlimeItem {
+    func create(content: String) throws -> SlimeItem {
         let post = Post(context: context)
         post.id = UUID()
         post.content = content
         post.createdAt = Date()
-        post.dayKey = calendar.startOfDay(for: post.createdAt)
+        // 存的是「今天是几月几号」，不是「今天零点那个时刻」—— 换了时区也认得出是哪天（见 DayStamp）
+        post.dayKey = DayStamp.stored(post.createdAt, in: calendar.timeZone)
         // emotion / reply 故意不写，留 nil = 「AI 还没读过」。
         // 模型里 emotion 已经没有默认值了，不写就真的是空 —— 以前这里不写会被填成 calm。
-        saveIfNeeded() //落盘
+        // 落盘。存不进去就撤回、抛给页面 —— 以前这里只 print，页面照样显示「收好了」
+        try context.saveOrRollback()
         return item(post)
     }
 
-    func saveAnalysis(id: UUID, emotion: SlimeEmotion, reply: String) {
+    func saveAnalysis(id: UUID, emotion: SlimeEmotion?, reply: String) {
         let request = Post.fetchRequest()
         request.predicate = NSPredicate(format: "id == %@", id as CVarArg)
         request.fetchLimit = 1
         // 按 id 重新查：中间隔着一次网络等待，那篇可能已经被删了，查不到就算了。
         guard let post = try? context.fetch(request).first else { return }
-        post.emotion = emotion.rawValue
+        post.emotion = emotion?.rawValue
         post.reply = reply
         saveIfNeeded()
     }
@@ -94,7 +101,7 @@ final class CoreDataPostRepository: PostRepository {
 
     func entriesByDay(from start: Date, before end: Date) -> [Date: [SlimeItem]] {
         let request = Post.fetchRequest()
-        request.predicate = Self.dayRange(from: start, before: end)
+        request.predicate = dayRange(from: start, before: end)
         // 升序取回来，归堆之后每堆天然就是按时间排好的 —— Dictionary(grouping:) 保留原顺序
         request.sortDescriptors = [NSSortDescriptor(keyPath: \Post.createdAt, ascending: true)]
         do {
@@ -156,22 +163,31 @@ final class CoreDataPostRepository: PostRepository {
 
     // MARK: - 「这篇算哪天」—— 全项目只有这里回答这个问题
 
-    /// 这篇算哪一天（那天的零点）。
+    /// 这篇算哪一天：**当前时区**那一天的零点。
     ///
-    /// 新写的都有 dayKey（`create` 里按本地零点算好存进去）；dayKey 出现之前的老日记没有，
-    /// 退回用写下的时刻算。**这两半必须是同一个口径**，所以都在这个文件里。
+    /// dayKey 存的是日历日期（见 `DayStamp`），读出来在这里换成当前时区的零点 ——
+    /// 上层拿它跟 `calendar.startOfDay(for:)` 比，换了时区照样对得上。
+    /// 以前直接把 dayKey 交出去，那是「写的时候那个时区的零点」，换了时区一天都对不上（10-02 修）。
+    ///
+    /// dayKey 是 nil 的老日记，启动时的 `DayStampMigration` 已经补上了；这里的兜底防的是哪条路漏写
     private func day(of post: Post) -> Date {
-        post.dayKey ?? calendar.startOfDay(for: post.createdAt)
+        guard let dayKey = post.dayKey else { return calendar.startOfDay(for: post.createdAt) }
+        return DayStamp.local(dayKey, in: calendar.timeZone)
     }
 
-    /// 「算哪天」落在 [start, end) 里的日记。start / end 应该是某天零点。
+    /// 「算哪天」落在 [start, end) 里的日记。start / end 是当前时区的某天零点。
     ///
-    /// 谓词里没法调 `day(of:)`，老日记（dayKey 是 nil）得单独捞：
+    /// 库里的 dayKey 是新存法，所以两头先换成新存法再比 —— 拿本地零点直接比的话，
+    /// 不在 UTC+0 的人会整片错开。
+    ///
+    /// 后半句捞 dayKey 是 nil 的：迁移之后正常不会有，留着兜底 ——
+    /// 只写前半句的话，没 dayKey 的日记会从广场上整片消失，不报错、只是看不见。
     /// 区间两头都是零点时，「startOfDay(createdAt) 落在区间里」和「createdAt 落在区间里」是一回事。
-    /// 只写前半句的话，老日记会从广场上整片消失 —— 不报错，只是看不见。
-    private static func dayRange(from start: Date, before end: Date) -> NSPredicate {
-        NSPredicate(format: "(dayKey >= %@ AND dayKey < %@) OR (dayKey == nil AND createdAt >= %@ AND createdAt < %@)",
-                    start as NSDate, end as NSDate, start as NSDate, end as NSDate)
+    private func dayRange(from start: Date, before end: Date) -> NSPredicate {
+        let storedStart = DayStamp.stored(start, in: calendar.timeZone)
+        let storedEnd = DayStamp.stored(end, in: calendar.timeZone)
+        return NSPredicate(format: "(dayKey >= %@ AND dayKey < %@) OR (dayKey == nil AND createdAt >= %@ AND createdAt < %@)",
+                           storedStart as NSDate, storedEnd as NSDate, start as NSDate, end as NSDate)
     }
 
     /// 托管对象变成值类型的唯一出口。
@@ -181,13 +197,13 @@ final class CoreDataPostRepository: PostRepository {
                   reply: post.reply, day: day(of: post))
     }
 
-    //有改动，把内容写进磁盘
+    /// 有改动，把内容写进磁盘。存不进去就撤回（见 `saveOrRollback`），不往上抛：
+    /// 补分析、删日记、存向量失败都不值得打扰用户 —— 撤回之后库里还是改之前的样子，界面刷新时照实显示
     private func saveIfNeeded() {
-        guard context.hasChanges else { return }
         do {
-            try context.save()
+            try context.saveOrRollback()
         } catch {
-            print("保存失败: \(error)")
+            print("保存失败，已撤回: \(error)")
         }
     }
 }

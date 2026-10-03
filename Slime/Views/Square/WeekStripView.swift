@@ -20,8 +20,14 @@ final class WeekStripView: UIView {
     var onSelect: ((SquareViewModel.Day) -> Void)?
     /// 翻到第几周（下标对应 SquareViewModel.weeks）。只在真的换页时回调一次。
     var onWeekChange: ((Int) -> Void)?
+    /// 用户**亲手**滑到了另一周，而且松手停稳了。跟 `onWeekChange` 不是一回事：
+    /// 那个拖到一半就报（标题要跟手），代码跳页（`jump` / `configure(jumpTo:)`）也会报；
+    /// 这个只认手指，滑到一半又弹回原来那周不算。示范教程靠它认「翻周学会了」
+    var onSwipedWeek: ((Int) -> Void)?
 
     private(set) var currentIndex = 0
+    /// 这次拖动开始时停在哪一周。松手停稳后跟它比，才知道是不是真的换了一周
+    private var dragStartIndex: Int?
 
     /// 内部那个横向分页 scrollView 的拖动手势。
     /// 外面要让自己的竖向手势和它互斥时用（见 SquareViewController 的下拉展开）。
@@ -164,6 +170,25 @@ extension WeekStripView: UICollectionViewDelegate {
 
         currentIndex = index
         onWeekChange?(index)
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        dragStartIndex = currentIndex
+    }
+
+    /// 松手时正好停在整页上、不用再滑（没有惯性）—— 这时不会有 didEndDecelerating，得在这里收尾
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate { reportSwipeIfNeeded() }
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        reportSwipeIfNeeded()
+    }
+
+    private func reportSwipeIfNeeded() {
+        guard let start = dragStartIndex else { return }
+        dragStartIndex = nil
+        if currentIndex != start { onSwipedWeek?(currentIndex) }
     }
 }
 

@@ -36,7 +36,8 @@ final class MemoryReranker: RecallReranking {
             candidates: boundedCandidates.enumerated().map { index, hit in
                 .init(id: "m\(index)",
                       approximateTime: ChineseDate.vague(hit.document.date),
-                      text: String(hit.document.text.prefix(160)))
+                      // 跟回复模型看到的必须是同一段，见 RecallExcerpt
+                      text: RecallExcerpt.of(hit.document))
             }
         )
 

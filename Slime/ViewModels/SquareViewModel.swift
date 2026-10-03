@@ -284,19 +284,19 @@ final class SquareViewModel {
             isOutsideMonth: month.map { !calendar.isDate(date, equalTo: $0, toGranularity: .month) } ?? false)
     }
     
-    /// 周条的第 index 周属于月历的第几页。按周四算，跟标题同一个口径 ——
+    /// 周条的第 index 周属于月历的第几页。看 `anchorDay`，跟标题同一个口径 ——
     /// 所以展开那一下标题不会变。
     ///
-    /// 返回 nil 只有一种情况：最早那一周的周四落在上个月（比如 5 月 1 号是周五，
-    /// 那一周的周四是 4/30），而 months 是从 5 月开始的。
+    /// 返回 nil 只有一种情况：最早那一周的锚点落在上个月（比如 5 月 1 号是周五，
+    /// 那一周的周三是 4/29；或者选中的就是 4/30），而 months 是从 5 月开始的。
     func monthIndex(ofWeek index: Int) -> Int? {
-        guard let mid = midday(ofWeek: index) else { return nil }
-        return months.firstIndex { calendar.isDate($0.start, equalTo: mid, toGranularity: .month) }
+        guard let anchor = anchorDay(ofWeek: index) else { return nil }
+        return months.firstIndex { calendar.isDate($0.start, equalTo: anchor, toGranularity: .month) }
     }
 
     /// 月历收起时，周条该停在哪一周。
     ///
-    /// 原则是**收起那一下标题不能跳** —— 所以只在「按周四算属于这个月」的周里挑，顺序是：
+    /// 原则是**收起那一下标题不能跳** —— 所以只在「按 `anchorDay` 算属于这个月」的周里挑，顺序是：
     ///   ① 周条原来停的那周：展开又收起、中间什么都没干，就该什么都没发生
     ///   ② 选中日所在的周：收起后高亮圈看得见
     ///   ③ 这个月的第一周
@@ -317,20 +317,20 @@ final class SquareViewModel {
 
     // MARK: - 标题
 
-    /// 一周可能跨月（8/31–9/6）。取**周四**所在的月 —— 七天里的第四天，
-    /// 也就是这周占天数多的那个月。标题在月中翻转，不会刚过一号就跳。
+    /// 一周可能跨月（9/27–10/3）。写 `anchorDay` 所在的月：选中的日子在这周里就写它的月，
+    /// 不在就写这周占天数多的那个月。
     func monthTitle(atWeek index: Int) -> String {
-        guard let mid = midday(ofWeek: index) else { return "" }
-        return monthTitle(of: mid)
+        guard let anchor = anchorDay(ofWeek: index) else { return "" }
+        return monthTitle(of: anchor)
     }
 
     /// 翻回不是今年的周时才给年份，今年返回 nil —— 平时标题一个字都不多。
     func yearTitle(atWeek index: Int) -> String? {
-        guard let mid = midday(ofWeek: index) else { return nil }
-        return yearTitle(of: mid)
+        guard let anchor = anchorDay(ofWeek: index) else { return nil }
+        return yearTitle(of: anchor)
     }
 
-    /// 月历那边的标题。一页就是一个整月，不用像周那样挑周四
+    /// 月历那边的标题。一页就是一个整月，不用像周那样挑锚点
     func monthTitle(atMonth index: Int) -> String {
         guard months.indices.contains(index) else { return "" }
         return monthTitle(of: months[index].start)
@@ -351,9 +351,17 @@ final class SquareViewModel {
         return String(year)
     }
 
-    private func midday(ofWeek index: Int) -> Date? {
+    /// 这一周的标题、属于月历哪一页，都看这一天。标题、展开到哪页、收起停哪周都走这里，所以三者不会对不上。
+    ///
+    /// 选中的日子在这周里 → 就是它：人正看着那天的日记，标题该写它所在的月。
+    /// 以前一律取第四天，10/2 打开日历页，那周是 9/27–10/3，标题写「九月」，可人在看十月二号。
+    /// 不在这周（翻到别的周看看）→ 取第四天。一周从周日开始，第四天是**周三**（不是周四），
+    /// 也就是这周占天数多的那个月。
+    private func anchorDay(ofWeek index: Int) -> Date? {
         guard weeks.indices.contains(index) else { return nil }
-        return calendar.date(byAdding: .day, value: 3, to: weeks[index].start)
+        let week = weeks[index]
+        if week.days.contains(where: { $0.date == selectedDate }) { return selectedDate }
+        return calendar.date(byAdding: .day, value: 3, to: week.start)
     }
 
     // MARK: - 补蛋（全部委托给 DayEggService，没变）

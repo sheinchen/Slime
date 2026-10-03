@@ -10,7 +10,12 @@ nonisolated enum AIConsent {
     /// 同意页的内容版本。**发给 AI 的东西变了（多了一种数据、换了接收方），这个数 +1**：
     /// 之前的同意全部作废，所有人下次打开都会重新看到同意页。
     /// 同意页（AIConsentViewController）上的文字要跟着一起改。
-    static let currentVersion = 1
+    ///
+    /// 历史：
+    /// · 1 第一版同意页（切片 17）
+    /// · 2 补上「DeepSeek 可能保存这些内容、用来改进自己的模型」。
+    ///   发的东西没变，但接收方会怎么用变了 —— 看过第 1 版的人没被告知这一条，得重新问
+    static let currentVersion = 2
 
     /// 用户同意过的版本现在还算不算数。nil = 没同意过，或者撤回了。
     static func isValid(grantedVersion: Int?) -> Bool {

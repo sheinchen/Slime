@@ -14,6 +14,7 @@ final class LaunchOptionsTests: XCTestCase {
     func test_什么都不带_什么都不开() {
         let o = LaunchOptions(arguments: ["Slime"])
         XCTAssertFalse(o.useTestStore)
+        XCTAssertFalse(o.resetTutorial)
         XCTAssertEqual(o.stubs, LaunchOptions.Stubs())
         XCTAssertNil(o.seed, "不带参数 = 不播种、用上次的库，这一档是必需的")
     }
@@ -53,6 +54,10 @@ final class LaunchOptionsTests: XCTestCase {
 
     func test_测试库开关() {
         XCTAssertTrue(LaunchOptions(arguments: ["-UseTestStore", "-SeedDiaries"]).useTestStore)
+    }
+
+    func test_重看示范开关() {
+        XCTAssertTrue(LaunchOptions(arguments: ["-ResetTutorial"]).resetTutorial)
     }
 }
 #endif

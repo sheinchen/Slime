@@ -22,6 +22,13 @@ nonisolated struct LaunchOptions: Equatable {
     /// **播种只在测试库上生效** —— 不开这个，DebugSeeder 会拒绝写入，一个字节都不碰真数据。
     let useTestStore: Bool
 
+    // MARK: - 示范教程
+
+    /// `-ResetTutorial`：每次启动都当成「没看过示范」，同意之后先进示范。
+    /// 产品上示范只出现一次、不能重看，这个开关只给开发时反复验它用。
+    /// 示范用的是内存里的假数据，开着它不会碰到测试库或正式库
+    let resetTutorial: Bool
+
     // MARK: - AI 打桩
 
     /// 哪几路 AI 换成 `StubAIService`，以及桩怎么演。
@@ -68,6 +75,8 @@ nonisolated struct LaunchOptions: Equatable {
         case diaries
         /// `-SeedLegacy`：老的 5 天 sad，留着对照
         case legacy
+        /// `-SeedShowcase`：新手示范那套剧本写进测试库，拍 App Store 截图用
+        case showcase
 
         // —— 在上次留下的库上动一点，**不清库、不清关怀**（接着上一幕演）——
         /// `-CareTurn`（旧名 `-CareStep2`）：把昨天重孵成 happy → 有新证据且是转折，看 AI 换不换新话
@@ -88,6 +97,7 @@ nonisolated struct LaunchOptions: Equatable {
         ("-SeedThin", .thin),
         ("-SeedDiaries", .diaries),
         ("-SeedLegacy", .legacy),
+        ("-SeedShowcase", .showcase),
         ("-CareTurn", .careTurn), ("-CareStep2", .careTurn),
         ("-CareFlat", .careFlat), ("-CareStep3", .careFlat),
         ("-CareLate", .careLate),
@@ -97,6 +107,7 @@ nonisolated struct LaunchOptions: Equatable {
     init(arguments: [String]) {
         let has = Set(arguments).contains
         useTestStore = has("-UseTestStore")
+        resetTutorial = has("-ResetTutorial")
 
         let all = has("-StubAI")
         stubs = Stubs(care: all || has("-StubCare"),

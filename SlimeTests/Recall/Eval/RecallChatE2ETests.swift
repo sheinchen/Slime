@@ -44,13 +44,12 @@ final class RecallChatE2ETests: XCTestCase {
 
         let context = CoreDataStack.shared.viewContext
         let posts = CoreDataPostRepository(context: context)
-        let chatRepo = CoreDataChatRepository(context: context)
         // 检索要两路（提炼 + 重排），聊天一路；以前一个 DeepSeekAIService 全包，09-25 拆开
         let client = EvalClient.make()
         let intentAI = RecallIntentExtractor(client: client)
         let rerankAI = MemoryReranker(client: client)
         let chatAI = HenChatService(client: client)
-        let embedder = try TextEmbedder()
+        let embedder = TextEmbedder()
 
         clearDiaries(in: context)
         seedDiaries(into: context)
@@ -76,11 +75,10 @@ final class RecallChatE2ETests: XCTestCase {
 
         // ③ 走完整的聊天链路。它内部会再检索一次 ——
         //    多一次调用换「跟真实路径完全一致」,值。
-        let vm = ChatViewModel(origin: .direct,
-                               chatRepo: chatRepo,
-                               aiService: chatAI,
-                               recall: recallService)
-        let reply = try await vm.send(message, onDelta: {})
+        let vm = ChatViewModel(aiService: chatAI, recall: recallService)
+        // 跟 ChatViewController.sendTapped 同一个顺序：先记下，再回
+        try vm.addUserMessage(message)
+        let reply = try await vm.reply(onDelta: {})
 
         let report = """
             母鸡会不会提起旧事 · 端到端
@@ -133,7 +131,7 @@ final class RecallChatE2ETests: XCTestCase {
             post.id = UUID()
             post.content = sample.text
             post.createdAt = at
-            post.dayKey = day
+            post.dayKey = DayStamp.stored(day, in: calendar.timeZone)
             post.emotion = sample.emotion.rawValue
             post.reply = "测试数据"
         }

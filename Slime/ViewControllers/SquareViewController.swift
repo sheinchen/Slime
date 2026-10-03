@@ -41,6 +41,43 @@ final class SquareViewController: UIViewController {
     private let cardStack = DiaryCardStackView()
     private let nestStage = NestStageView()
 
+    // MARK: - 对外回报
+
+    /// 用户在这一页做了什么。
+    enum UserAction {
+        /// 按住母鸡按满了，蛋下出来了（总结还没回来）
+        case laidEgg
+        /// 今天的蛋孵完了（总结回来、落了库、画上了）
+        case hatchedToday(success: Bool)
+        case flippedCard
+        /// 手指滑到了另一周 / 另一个月（松手停稳才算）
+        case swipedWeek
+        case swipedMonth
+        /// 选了一天。`fromMonth` = 在月历里点的
+        case pickedDay(isToday: Bool, entryCount: Int, fromMonth: Bool)
+        case monthExpanded(Bool)
+        case editingChanged(Bool)
+        case deletedEntry
+        /// 删完之后那天的蛋重孵回来了，画上了
+        case rehatched
+    }
+
+    /// **正式 App 里没人听**；示范教程靠它知道用户做到了哪一步（`TutorialAssembly` 里接）。
+    /// 报的都是「已经发生了、画面也更新完了」的事
+    var onUserAction: ((UserAction) -> Void)?
+
+    // MARK: - 手势开关（示范教程用）
+
+    /// 用户能不能拉开 / 收起月历（周条上下拉、月历上上推、点月份标题）。**正式 App 里一直是 true**。
+    /// 示范教翻周、点天时关掉 —— 那几步洞只开在周条上，一拉开月历周条就淡没了，人会卡死
+    /// （见 `TutorialFlow.allowsMonthToggle`）。只拦用户的手，代码里收起月历（在月历里选完日期）不受影响
+    var allowsMonthToggle = true
+    /// 用户能不能长按卡片进删除模式。同上，示范里只在教删除那两步打开
+    var allowsCardEditing: Bool {
+        get { cardStack.allowsEditing }
+        set { cardStack.allowsEditing = newValue }
+    }
+
     // MARK: - 生命周期
 
     override func viewDidLoad() {
@@ -89,11 +126,20 @@ final class SquareViewController: UIViewController {
             guard let self else { return }
             self.viewModel.select(day)
             self.refresh(showFirstCard: true)
+            self.onUserAction?(.pickedDay(isToday: day.isToday,
+                                          entryCount: self.viewModel.entries.count,
+                                          fromMonth: false))
         }
+
+        // 示范教程按这几个名字找到周条 / 月历 / 卡片区（月历和卡片区在各自的 setup 里设）
+        weekStrip.accessibilityIdentifier = TutorialAnchor.weekStrip.rawValue
 
         // 翻周只换标题，不碰选中、不碰列表、不碰鸟巢 —— 翻周就只是「看看那周」
         weekStrip.onWeekChange = { [weak self] _ in
             self?.updateTitle()
+        }
+        weekStrip.onSwipedWeek = { [weak self] _ in
+            self?.onUserAction?(.swipedWeek)
         }
         nestStage.snp.makeConstraints { make in
         make.leading.trailing.equalToSuperview()
@@ -121,6 +167,7 @@ final class SquareViewController: UIViewController {
         
         nestStage.onDidLay = { [weak self] in
             guard let self else { return }
+            self.onUserAction?(.laidEgg)
             Task {
                 let hatched: Bool
                 do {
@@ -139,6 +186,7 @@ final class SquareViewController: UIViewController {
                 if !hatched, self.viewModel.selectedDay.isToday, self.viewModel.canHatchToday {
                     self.nestStage.setCaption("咕…没孵出来，等会儿再按我试试")
                 }
+                self.onUserAction?(.hatchedToday(success: hatched))
             }
         }
     }
@@ -169,6 +217,7 @@ final class SquareViewController: UIViewController {
     /// 早于卡片加进去就会被卡片盖住。
     private func setupMonthGrid() {
         monthGrid.isHidden = true
+        monthGrid.accessibilityIdentifier = TutorialAnchor.monthGrid.rawValue
         view.addSubview(monthGrid)
         monthGrid.snp.makeConstraints { make in
             make.top.equalTo(weekStrip.snp.top)
@@ -184,11 +233,17 @@ final class SquareViewController: UIViewController {
             // 这里不走 alignHiddenSide 的「标题不跳」规则：点的若是上月末那几格，
             // 周条就该去那天，标题跟着变才是对的
             self.refresh(jumpTo: self.viewModel.weekIndex(containing: day.date), showFirstCard: true)
+            self.onUserAction?(.pickedDay(isToday: day.isToday,
+                                          entryCount: self.viewModel.entries.count,
+                                          fromMonth: true))
         }
 
         // 翻月同翻周：只换标题
         monthGrid.onMonthChange = { [weak self] _ in
             self?.updateTitle()
+        }
+        monthGrid.onSwipedMonth = { [weak self] _ in
+            self?.onUserAction?(.swipedMonth)
         }
 
         // 两处都要能拖：收起时在周条上往下拉，展开时在月历上往上推。
@@ -257,6 +312,7 @@ final class SquareViewController: UIViewController {
     }
 
     @objc private func titleTapped() {
+        guard allowsMonthToggle else { return }
         alignHiddenSide()
         setMonthExpanded(!isMonthExpanded)
     }
@@ -272,7 +328,7 @@ final class SquareViewController: UIViewController {
             weekStrip.jump(to: viewModel.weekIndex(forMonth: monthGrid.currentIndex,
                                                    current: weekStrip.currentIndex))
         } else {
-            // nil 只在最早那一周出现（它的周四落在 months 之前那个月），就近取第一页
+            // nil 只在最早那一周出现（它的锚点落在 months 之前那个月），就近取第一页
             monthGrid.jump(to: viewModel.monthIndex(ofWeek: weekStrip.currentIndex) ?? 0)
             monthGrid.isHidden = false
         }
@@ -286,7 +342,10 @@ final class SquareViewController: UIViewController {
     ///
     /// - Parameter animated: `viewWillAppear` 里重置时传 false，不然进页面会看到月历闪一下
     private func setMonthExpanded(_ expanded: Bool, animated: Bool = true) {
+        // 只在真的换了状态时才往外报：进页时的「收起」（reopen）本来就是收着的，不算一次动作
+        let changed = expanded != isMonthExpanded
         isMonthExpanded = expanded
+        if changed { onUserAction?(.monthExpanded(expanded)) }
         // 标题的来源换了一边（周条 ↔ 月历）。alignHiddenSide 对好位置之后两边是同一个月，
         // 平时这句不会让标题变；只有最早那一周的边角情况会，见 alignHiddenSide
         updateTitle()
@@ -364,6 +423,7 @@ final class SquareViewController: UIViewController {
 
     private func setupCards() {
         view.addSubview(cardArea)
+        cardArea.accessibilityIdentifier = TutorialAnchor.cards.rawValue
         cardArea.snp.makeConstraints { make in
             make.top.equalTo(weekStrip.snp.bottom).offset(24)
             // 和周条、浮动 tab 条同一个 22 缩进，竖着看是对齐的
@@ -398,6 +458,12 @@ final class SquareViewController: UIViewController {
         cardStack.onDelete = { [weak self] item in
             self?.deleteItem(item)
         }
+        cardStack.onFlip = { [weak self] in
+            self?.onUserAction?(.flippedCard)
+        }
+        cardStack.onEditingChange = { [weak self] editing in
+            self?.onUserAction?(.editingChanged(editing))
+        }
 
         // 页码点只是个指示，不接点击 —— 换下一篇就靠抽卡
         pageControl.hidesForSinglePage = true
@@ -420,8 +486,12 @@ final class SquareViewController: UIViewController {
     private func deleteItem(_ item: SlimeItem) {
         viewModel.delete(item)
         refresh()
+        onUserAction?(.deletedEntry)
         Task {
-            if await viewModel.rehatchAfterDelete(item) { refresh() }
+            if await viewModel.rehatchAfterDelete(item) {
+                refresh()
+                onUserAction?(.rehatched)
+            }
         }
     }
 }
@@ -435,6 +505,8 @@ extension SquareViewController: UIGestureRecognizerDelegate {
     /// 这个判断就是两者的分工线。
     func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
         guard let pan = gestureRecognizer as? UIPanGestureRecognizer else { return true }
+        // 关着就当这次拖动「不是竖着的」—— 返回 false = 手势失败，周条 / 月历的横滑照常接管
+        guard allowsMonthToggle else { return false }
         let velocity = pan.velocity(in: view)
         guard abs(velocity.y) > abs(velocity.x) else { return false }
         return isMonthExpanded ? velocity.y < 0 : velocity.y > 0

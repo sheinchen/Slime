@@ -15,7 +15,7 @@
 set -e
 
 DEVICE="${1:-iPhone 17 Pro}"          # 可以传参换机型：bash check.sh "iPhone 17"
-BUNDLE="com.shiying.Slime"
+BUNDLE="com.shiying.muji"             # 09-29 从 com.shiying.Slime 改过来（开通开发者账号时定的，上传后不能再改）
 
 # 系统 xcode-select 指向 Command Line Tools，simctl 得靠这个环境变量找到完整 Xcode
 export DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
@@ -44,7 +44,8 @@ q() { sqlite3 -header -column "$DB" "$1"; }
 echo "📂 $DB"
 echo
 echo "════════ 蛋（这就是发给 AI 的窗口内容）════════"
-q "select date(zdate+$EPOCH,'unixepoch','localtime') as 日期,
+# 蛋的 date 存的是「那个日历日期的 UTC 零点」（见 DayStamp），按 UTC 读才是它的日期 —— 加 localtime 在负时区会差一天
+q "select date(zdate+$EPOCH,'unixepoch') as 日期,
           zemotion as 情绪,
           datetime(zcreatedat+$EPOCH,'unixepoch','localtime') as 孵出时刻,
           ztext as 总结

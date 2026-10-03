@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<!--
+  母鸡日记的支持页。跟隐私政策一样由中转 Worker 顺带托管(见 wrangler.jsonc 的 assets),
+  线上地址 https://slime-relay.hen-diary-2026.workers.dev/support ——
+  App Store Connect 的「支持网址」(Support URL,必填)填的就是这个。
+
+  ⚠️ 「常见问题」描述的是 App 的实际界面(点鸟巢写、按住母鸡孵、日历页长按卡片删……),
+     改了交互要回来改这里,不然用户照着做找不到。
+  ⚠️ 联系邮箱、开发者名字跟 privacy.html 一致,改的话两页一起改。
+  ⚠️ 「如果你现在很难受」那一节是本地写死的求助指引,不经过 AI。别删:
+     母鸡的 prompt 里规定了「不要自己编电话号码」,所以 App 里没有任何真实可拨的号码,只有这里有。
+-->
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>帮助与支持 · 母鸡日记</title>
+<meta name="description" content="母鸡日记帮助与支持 / Hen Diary Support">
+<style>
+  :root {
+    --bg: #FEFCF4;
+    --card: #FFFEFA;
+    --ink: #4A3D2E;
+    --ink-soft: rgba(74, 61, 46, 0.72);
+    --ink-faint: rgba(74, 61, 46, 0.45);
+    --line: rgba(74, 61, 46, 0.12);
+    --accent: #D9772E;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1E1A15;
+      --card: #28231C;
+      --ink: #F1E8D8;
+      --ink-soft: rgba(241, 232, 216, 0.75);
+      --ink-faint: rgba(241, 232, 216, 0.5);
+      --line: rgba(241, 232, 216, 0.14);
+      --accent: #F0A060;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+                 "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+    line-height: 1.75;
+  }
+  main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: max(28px, env(safe-area-inset-top)) 20px max(48px, env(safe-area-inset-bottom));
+  }
+  nav { font-size: 14px; color: var(--ink-faint); margin-bottom: 20px; }
+  nav a { color: var(--accent); text-decoration: none; }
+  h1 { font-size: 28px; line-height: 1.3; margin: 0 0 20px; letter-spacing: 0.02em; }
+  h2 {
+    font-size: 19px; line-height: 1.4; margin: 36px 0 10px;
+    padding-top: 20px; border-top: 1px solid var(--line);
+  }
+  h3 { font-size: 16px; margin: 22px 0 6px; }
+  p, li { color: var(--ink-soft); }
+  p { margin: 0 0 12px; }
+  ul { margin: 0 0 12px; padding-left: 1.2em; }
+  li { margin: 4px 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--accent); }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 18px 6px;
+    margin-bottom: 14px;
+  }
+  /* 求助指引:跟联系方式同一种卡片,只多一条左边的强调色,不用红色 —— 不想把人吓着 */
+  .card.care { border-left: 4px solid var(--accent); }
+  .card h3 { margin-top: 0; }
+  .lang-divider { margin-top: 64px; }
+</style>
+</head>
+<body>
+<main>
+
+<nav><a href="#zh">中文</a> · <a href="#en">English</a> · <a href="/privacy">隐私政策 Privacy</a></nav>
+
+<!-- ============================== 中文 ============================== -->
+<article id="zh" lang="zh-Hans">
+
+<h1>母鸡日记 · 帮助与支持</h1>
+
+<div class="card">
+  <h3>联系我</h3>
+  <p>有问题、建议，或者发现了 bug，请写信到 <a href="mailto:chenshiying2002@163.com">chenshiying2002@163.com</a>。</p>
+  <p>母鸡日记是我（陈诗莹）个人开发的，我会尽快回复。写信时附上手机型号、iOS 版本和截图，能更快弄清楚问题。</p>
+</div>
+
+<div class="card care">
+  <h3>如果你现在很难受</h3>
+  <p>母鸡是一只由 AI 驱动的小鸡，她会陪你说说话，但她<strong>不是心理咨询师，也处理不了紧急情况</strong>。</p>
+  <p>如果你正处在危险中，或者有伤害自己的念头，请<strong>马上联系当地的紧急服务</strong>，或者拨打你所在地区的心理危机热线。在 <a href="https://findahelpline.com">findahelpline.com</a> 可以按国家和地区找到免费、保密的求助热线。也可以告诉一个你信得过的人。</p>
+</div>
+
+<h2>常见问题</h2>
+
+<h3>怎么用？</h3>
+<ul>
+  <li><strong>写日记</strong>：在首页点鸟巢。一天可以写很多篇，想到什么写什么。</li>
+  <li><strong>孵今天的蛋</strong>：点底部的日历图标，在鸟巢那儿按住母鸡。这一天的日记会收成一颗蛋，蛋的样子跟这一天的心情有关。</li>
+  <li><strong>看过去的日子</strong>：点底部的日历图标。周条可以左右滑，往下拉能展开成月历。</li>
+  <li><strong>和母鸡聊天</strong>：点底部右边的圆形气泡。</li>
+</ul>
+
+<h3>母鸡没接我写的内容，只说「收好啦」？</h3>
+<p>母鸡读日记需要联网。没网或网络很慢时，日记会<strong>先存好</strong>，一个字都不会少，只是这一篇母鸡没法回你了。</p>
+<p>如果一直都是这样：中国大陆版的 iPhone 第一次打开时会问「是否允许使用数据」，选了「不允许」母鸡就连不上网。到 iPhone 的「设置 → 母鸡日记 → 无线数据」里改成「无线局域网与蜂窝网络」就好。</p>
+
+<h3>之前那几天的蛋没孵出来？</h3>
+<p>下次有网时打开 App，会自动补上。今天的蛋要你自己在日历页按住母鸡孵。</p>
+
+<h3>母鸡什么时候会主动跟我说话？</h3>
+<p>不是每天都有，她有话想对你说的时候才会开口。</p>
+
+<h3>我的日记存在哪里？谁能看到？</h3>
+<p>存在你自己的手机上，没有账号，我的服务器上也没有你的日记。用到 AI 功能时，相关内容会发给 DeepSeek 处理，详见<a href="/privacy">隐私政策</a>。</p>
+
+<h3>怎么撤回 AI 授权？</h3>
+<p>首页右上角的齿轮 → 撤回 AI 授权。撤回之后不再发送任何内容，日记都还在，重新同意就能接着用。</p>
+
+<h3>怎么删除日记？</h3>
+<p>在日历页长按日记卡片，点角上出现的 × 就能删除。删除 App 会清除手机上的全部数据。</p>
+
+<h3>换手机时，日记能带过去吗？</h3>
+<p>没有账号和云同步，但用 iCloud 云备份恢复新手机、或用「快速开始」迁移时，日记会一起过去。<strong>直接删除 App 的话，日记就找不回来了。</strong></p>
+
+</article>
+
+<!-- ============================== English ============================== -->
+<article id="en" lang="en" class="lang-divider">
+
+<h1>Hen Diary · Help &amp; Support</h1>
+
+<div class="card">
+  <h3>Contact me</h3>
+  <p>For questions, suggestions or bug reports, email <a href="mailto:chenshiying2002@163.com">chenshiying2002@163.com</a>.</p>
+  <p>I'm Shiying Chen (陈诗莹), the independent developer of Hen Diary, and I'll reply as soon as I can. Including your iPhone model, iOS version and a screenshot helps me figure things out faster.</p>
+</div>
+
+<div class="card care">
+  <h3>If you are struggling right now</h3>
+  <p>The hen is an AI-powered character. She can keep you company, but she is <strong>not a therapist and cannot help in an emergency</strong>.</p>
+  <p>If you are in danger or thinking about harming yourself, please <strong>contact your local emergency services right away</strong>, or call a crisis line where you live. You can find free, confidential helplines by country at <a href="https://findahelpline.com">findahelpline.com</a>. You can also reach out to someone you trust.</p>
+</div>
+
+<h2>FAQ</h2>
+
+<h3>How do I use it?</h3>
+<ul>
+  <li><strong>Write an entry</strong>: tap the nest on the home screen. Write as many as you like each day.</li>
+  <li><strong>Hatch today's egg</strong>: tap the calendar icon at the bottom, then press and hold the hen at the nest. The day's entries become one egg, whose look reflects how the day felt.</li>
+  <li><strong>Look back</strong>: tap the calendar icon at the bottom. Swipe the week strip sideways, or pull it down to open the month view.</li>
+  <li><strong>Chat with the hen</strong>: tap the round speech-bubble button at the bottom right.</li>
+</ul>
+
+<h3>The hen didn't respond to what I wrote — she only said she'd kept it safe?</h3>
+<p>Reading your entry needs an internet connection. When you're offline or the network is very slow, your entry is still <strong>saved in full</strong> — the hen just can't reply to that one.</p>
+<p>If it happens every time: on iPhones sold in mainland China, the first launch asks whether the app may use data. If “Don't Allow” was chosen, the hen can't connect. Go to iPhone Settings → 母鸡日记 → Wireless Data and choose “WLAN &amp; Cellular Data”.</p>
+
+<h3>Eggs from earlier days haven't hatched?</h3>
+<p>They'll hatch automatically the next time you open the app online. Today's egg hatches when you press and hold the hen on the calendar page.</p>
+
+<h3>When does the hen speak up on her own?</h3>
+<p>Not every day — only when she has something she wants to say to you.</p>
+
+<h3>Where is my diary stored? Who can see it?</h3>
+<p>On your own iPhone. There are no accounts, and your diary is not on my servers. When you use an AI feature, the relevant content is sent to DeepSeek. See the <a href="/privacy#en">Privacy Policy</a> for details.</p>
+
+<h3>How do I withdraw AI consent?</h3>
+<p>Tap the gear at the top right of the home screen → Withdraw AI consent (撤回 AI 授权). After that nothing is sent. Your entries stay on the device; agree again at any time to keep using it.</p>
+
+<h3>How do I delete an entry?</h3>
+<p>On the calendar page, press and hold a diary card, then tap the × on its corner. Deleting the app removes all data on the device.</p>
+
+<h3>Can I move my diary to a new iPhone?</h3>
+<p>There are no accounts or cloud sync, but your diary moves along when you restore from an iCloud backup or use Quick Start. <strong>If you delete the app, your diary cannot be recovered.</strong></p>
+
+</article>
+
+</main>
+</body>
+</html>

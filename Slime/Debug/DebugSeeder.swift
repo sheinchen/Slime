@@ -67,17 +67,17 @@ enum DebugSeeder {
                 post.id = UUID()
                 post.content = Self.sampleEntry(emotion, dayIndex: index, n: n)
                 post.createdAt = at
-                post.dayKey = day                        // 归堆靠它，别漏
+                post.dayKey = DayStamp.stored(day, in: .current)   // 归堆靠它，别漏。存法见 DayStamp
                 post.emotion = emotion.rawValue
                 post.reply = "测试数据"
             }
 
             if withEggs {
-                // 先查后建（upsert）。直接 new 会在那天已有蛋时插出第二行，
-                // 而 DayEggStore.eggs(from:before:) 用的是 Dictionary(uniqueKeysWithValues:)，
-                // 撞 key 会直接 fatalError —— 一进广场页就崩。
+                // 先查后建（upsert）。直接 new 会在那天已有蛋时插出第二行 ——
+                // 库里没有唯一约束拦着。DayEggStore 读到重复会留孵得晚的那颗、不会崩，
+                // 但播出来的数据就不是「一天一颗」了，测的也就不是真实状态。
                 let egg = existingEgg(for: day, in: context) ?? DayEgg(context: context)
-                egg.date = day
+                egg.date = DayStamp.stored(day, in: .current)
                 egg.text = Self.sampleSummary(emotion, dayIndex: index)
                 egg.emotion = emotion.rawValue
                 // 必须晚于那天最后一篇日记 —— EggDebt.owes 判的就是 egg.createdAt < latestEntryAt。
@@ -192,7 +192,7 @@ enum DebugSeeder {
 
         // upsert：那天已有蛋就覆盖。createdAt = 现在，闸门条件①靠它判「有新蛋」
         let egg = existingEgg(for: day, in: context) ?? DayEgg(context: context)
-        egg.date = day
+        egg.date = DayStamp.stored(day, in: .current)
         egg.text = text
         egg.emotion = emotion.rawValue
         egg.createdAt = Date()
@@ -204,7 +204,7 @@ enum DebugSeeder {
 
     private static func existingEgg(for day: Date, in context: NSManagedObjectContext) -> DayEgg? {
         let request = NSFetchRequest<DayEgg>(entityName: "DayEgg")
-        request.predicate = NSPredicate(format: "date == %@", day as NSDate)
+        request.predicate = NSPredicate(format: "date == %@", DayStamp.stored(day, in: .current) as NSDate)
         request.fetchLimit = 1
         return try? context.fetch(request).first
     }

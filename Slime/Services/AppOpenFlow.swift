@@ -40,7 +40,7 @@ final class AppOpenFlow {
     /// - Parameters:
     ///   - hatchPending: 把欠的蛋补上，返回补了几颗
     ///   - evaluateCare: 跑一遍关怀（闸门 → AI → 落库）
-    ///   - backfillIndex: 给日记补向量。向量模型没加载起来时是 nil
+    ///   - backfillIndex: 给日记补向量。可以不给（测试里只关心前面几步）
     ///   - refreshPages: 让各页重读一遍（日子、蛋、关怀卡片）
     init(hatchPending: @escaping @MainActor () async -> Int,
          evaluateCare: @escaping @MainActor () async -> Void,

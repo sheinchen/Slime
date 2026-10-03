@@ -31,7 +31,7 @@ final class RecallIntentEvalTests: XCTestCase {
         XCTAssertNotNil(EvalClient.devToken, "读不到仓库根目录 Secrets.plist 里的 RelayDevToken（见 EvalClient）")
 
         let ai = RecallIntentExtractor(client: EvalClient.make())
-        let embedder = try TextEmbedder()
+        let embedder = TextEmbedder()
         let documents = RecallEvalCorpus.documents(now: now)
 
         var docVectors: [UUID: [Float]] = [:]

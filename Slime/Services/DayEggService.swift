@@ -146,7 +146,8 @@ final class DayEggService {
         guard posts.entries(on: today).map(\.id) == current.basis else {
             return try await finishToday(now: now)
         }
-        eggs.save(text: summary.text, emotion: summary.emotion, for: today)
+        // 存不上就抛 —— 跟「没孵出来」走同一条路，母鸡说「等会儿再按我试试」
+        try eggs.save(text: summary.text, emotion: summary.emotion, for: today)
         return summary
     }
 
@@ -197,7 +198,7 @@ final class DayEggService {
 
         do {
             let summary = try await summarizer.summarizeDay(entries)
-            eggs.save(text: summary.text, emotion: summary.emotion, for: day)
+            try eggs.save(text: summary.text, emotion: summary.emotion, for: day)
             return true
         } catch {
             return false

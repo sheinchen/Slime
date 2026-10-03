@@ -146,7 +146,7 @@ extension DebugSeeder {
                 post.id = UUID()
                 post.content = entry.text
                 post.createdAt = at
-                post.dayKey = day                        // 归堆靠它，别漏
+                post.dayKey = DayStamp.stored(day, in: .current)   // 归堆靠它，别漏。存法见 DayStamp
                 post.emotion = entry.emotion.rawValue
                 post.reply = "测试数据"
                 entryCount += 1
@@ -155,7 +155,7 @@ extension DebugSeeder {
             if let egg = seed.egg {
                 // 刚 wipeAll 过，不会撞上已有的蛋，直接建
                 let record = DayEgg(context: context)
-                record.date = day
+                record.date = DayStamp.stored(day, in: .current)
                 record.text = egg.text
                 record.emotion = egg.emotion.rawValue
                 // 必须晚于那天最后一篇 —— 否则 EggDebt 判「蛋过时了」，一开 App 就重孵一堆

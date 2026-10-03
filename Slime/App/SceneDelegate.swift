@@ -28,6 +28,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     /// 主界面（tab 那一套）。同意之后才挂到窗口上；撤回时换下来，但对象留着 ——
     /// 重新同意时直接换回来，不用把所有页面重建一遍
     private var mainUI: UIViewController?
+    /// 示范看过没有。没看过：同意之后先进示范，走完（或跳过）才换上主界面
+    private var tutorial: TutorialStore?
+    /// 向量模型。存着是为了窗口亮出来之后再在后台预热（见 `warmUpEmbedder`）
+    private var embedder: TextEmbedder?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         // scene 是一个 UIWindowScene(带屏幕的场景),转型失败就不往下走
@@ -35,16 +39,42 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         // 用这个 scene 创建一块 window(App 的画布,所有界面都画在它上面)
         let window = UIWindow(windowScene: windowScene)
+        // 持有 window（存到属性里，不然会被释放）。要在挂根页面之前：setRoot 读的是 self.window
+        self.window = window
 
+        // 第一件事：库打开了没有。没打开（迁移失败、手机空间满了…）就只挂一页「日记本打不开了」，
+        // 仓库、页面、补蛋一样都不建 —— 建了也是对着一个空库读写。
+        // 以前这里根本走不到：CoreDataStack 里是 fatalError，每次打开都崩（10-02 改）
+        if CoreDataStack.shared.isLoaded {
+            assemble()
+            showFirstPage(animated: false)
+        } else {
+            showStoreError()
+        }
+        window.makeKeyAndVisible()
+        warmUpEmbedder()
+
+        // 系统在零点（以及运营商校时、夏令时切换这类时间突变）时发这个通知，
+        // 在主线程上发。用 selector 版本：闭包版本的回调不带主线程隔离，
+        // 在里面碰 rootVC 编译器会拦。SceneDelegate 跟 App 同寿，不用手动移除观察者。
+        NotificationCenter.default.addObserver(self,
+                                               selector: #selector(significantTimeChange),
+                                               name: UIApplication.significantTimeChangeNotification,
+                                               object: nil)
+    }
+
+    /// 组装：全 App 只有这里 new 具体类型、把依赖接起来。**库打开之后才调**，只调一次
+    private func assemble() {
         // MARK: 仓库
 
         let postRepo = CoreDataPostRepository()
         let eggStore = CoreDataDayEggStore()
         let careMessages = CoreDataCareMessageStore()
         let careChecks = CoreDataCareCheckStore()
-        let chatRepo = CoreDataChatRepository()
         let consent = UserDefaultsAIConsentStore()
         self.consent = consent
+        let tutorial = UserDefaultsTutorialStore()
+        self.tutorial = tutorial
 
         // MARK: AI
 
@@ -79,13 +109,12 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         let eggService = DayEggService(posts: postRepo, eggs: eggStore, summarizer: eggAI)
 
-        // 模型只加载一次,两个 Service 共用。45MB 的 Core ML 模型建两遍既慢又白占内存。
-        // 加载失败就是 nil,聊天照常跑,只是母鸡不会提起旧事。
-        let embedder = try? TextEmbedder()
-        let recallIndex = embedder.map { RecallIndexService(posts: postRepo, embedder: $0) }
-        let recallService = embedder.map {
-            RecallService(posts: postRepo, embedder: $0, ai: intentAI, reranker: rerankAI)
-        }
+        // 向量模型两个 Service 共用一个。这里只建个空壳、不加载：加载等首页出来后在后台做（见下面 warmUp）。
+        // 加载失败的话向量那一路拿不到东西，检索退回关键词 + 情绪两路，聊天照常
+        let embedder = TextEmbedder()
+        self.embedder = embedder
+        let recallIndex = RecallIndexService(posts: postRepo, embedder: embedder)
+        let recallService = RecallService(posts: postRepo, embedder: embedder, ai: intentAI, reranker: rerankAI)
 
         let careEngine = CareEngine(gate: CareGate(eggs: eggStore, messages: careMessages, checks: careChecks),
                                     messages: careMessages,
@@ -101,12 +130,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
             self?.rootVC?.broadcastDataChange()
         }
 
-        // 聊天有两个入口：首页点母鸡、tab 条右边那个圆。共用一份构造
+        // 聊天的入口：tab 条右边那个圆（首页点母鸡 10-02 起不再进聊天）
         let makeChat: () -> UIViewController = {
-            ChatViewController(viewModel: ChatViewModel(origin: .direct,
-                                                        chatRepo: chatRepo,
-                                                        aiService: chatAI,
-                                                        recall: recallService))
+            // 每次都是新的一段对话，只在内存里：关掉聊天页就没了（不存库，见 ChatViewModel.messages）
+            ChatViewController(viewModel: ChatViewModel(aiService: chatAI, recall: recallService))
         }
 
         let composeVM = ComposeViewModel(repository: postRepo, aiService: chatAI)
@@ -122,18 +149,16 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         let homeVC = HomeViewController(viewModel: HomeViewModel(messages: careMessages, eggs: eggStore),
                                         makeCompose: makeCompose,
-                                        makeChat: makeChat,
                                         makeSettings: { [weak self] in
                                             SettingsViewController(onWithdraw: { self?.withdrawConsent() })
                                         })
         let squareVM = SquareViewModel(repository: postRepo, eggStore: eggStore, eggService: eggService)
 
-        // 图标先用 SF Symbols 占位 —— 换成自己的 icon 时只改这三个名字。
         // 右边那个圆不是 tab，是动作入口，去哪由这里决定。
         let rootVC = RootTabBarController(
             pages: [homeVC, SquareViewController(viewModel: squareVM)],
-            icons: ["house.fill", "calendar"],
-            accessoryIcon: "bubble.left.fill"
+            icons: RootTabBarController.pageIcons,
+            accessoryIcon: RootTabBarController.accessoryIcon
         )
         rootVC.onAccessoryTap = { [weak rootVC] in
             rootVC?.present(makeChat(), animated: true)
@@ -142,16 +167,10 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
 
         // MARK: 回到 App 的流程
 
-        // 补向量：向量模型没加载起来（recallIndex 是 nil）就没有这一步。
-        // 写成 if let 而不是 recallIndex.map { … }：闭包从 map 里返回出来，编译器推不出它是主线程隔离的
-        var backfill: (@MainActor () async -> Void)?
-        if let recallIndex {
-            backfill = { _ = await recallIndex.backfill() }
-        }
         openFlow = AppOpenFlow(
             hatchPending: { await eggService.hatchAllPending() },
             evaluateCare: { await careEngine.handle(.appOpened) },
-            backfillIndex: backfill,
+            backfillIndex: { _ = await recallIndex.backfill() },
             refreshPages: refreshAllPages)
 
         mainUI = UINavigationController(rootViewController: rootVC)
@@ -161,25 +180,41 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if let seed = options.seed {
             DebugSeeder.run(seed)
         }
-        #endif
-
-        // 持有 window（存到属性里，不然会被释放）。要在挂根页面之前：showConsentPage 读的是 self.window
-        self.window = window
-        // 没同意就先见同意页，主界面这时候根本不在窗口上
-        if consent.hasConsented {
-            window.rootViewController = mainUI
-        } else {
-            showConsentPage(animated: false)
+        if options.resetTutorial {
+            tutorial.reset()
         }
-        window.makeKeyAndVisible()
+        #endif
+    }
 
-        // 系统在零点（以及运营商校时、夏令时切换这类时间突变）时发这个通知，
-        // 在主线程上发。用 selector 版本：闭包版本的回调不带主线程隔离，
-        // 在里面碰 rootVC 编译器会拦。SceneDelegate 跟 App 同寿，不用手动移除观察者。
-        NotificationCenter.default.addObserver(self,
-                                               selector: #selector(significantTimeChange),
-                                               name: UIApplication.significantTimeChangeNotification,
-                                               object: nil)
+    /// 在后台把向量模型加载好。装完 / 更新后第一次要 2 秒 —— 窗口亮出来之后在后台做，用户看不见；
+    /// 拖到第一次聊天才加载就要让人干等。utility = 不急的后台活，不跟界面抢
+    private func warmUpEmbedder() {
+        guard let embedder else { return }
+        Task.detached(priority: .utility) {
+            embedder.warmUp()
+        }
+    }
+
+    // MARK: - 库打不开
+
+    private func showStoreError() {
+        let error = CoreDataStack.shared.loadError ?? CocoaError(.fileReadUnknown)
+        setRoot(StoreErrorViewController(error: error, onRetry: { [weak self] in
+            self?.retryOpeningStore() ?? false
+        }), animated: false)
+    }
+
+    /// 「再试一次」。打开了就照冷启动的路子把 App 建起来，换掉错误页
+    private func retryOpeningStore() -> Bool {
+        guard CoreDataStack.shared.retryLoad() else { return false }
+        assemble()
+        showFirstPage(animated: true)
+        warmUpEmbedder()
+        // 冷启动那一轮回前台被跳过了（那时 consent 还是 nil），现在补跑：欠的蛋孵上、关怀评估一次
+        if consent?.hasConsented == true {
+            openFlow?.enterForeground()
+        }
+        return true
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
@@ -217,26 +252,71 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     // MARK: - 同意页 ⇄ 主界面
 
     /// 换整个根页面。同意页不是盖在主界面上的弹窗 —— 没同意时主界面根本不在窗口上，没有路能绕过去
+    ///
+    /// 淡入淡出是「新页面先放好，旧页面的截图盖在上面淡掉」，不用 `UIView.transition(with: window…)`。
+    /// 那种写法是系统对整个窗口做交叉淡化，Metal 画的内容（首页的 Rive 母鸡）在里面怎么显示不归我们管；
+    /// 这样写首页从第一帧起就是真画面，母鸡画出来就透过淡掉的截图显出来。
+    /// 09-28 真机不挂调试器：同意后母鸡跟着岛一起出来，不闪。
+    /// ⚠️ 从 Xcode 挂着调试器跑、又是全新安装时，第一次编译着色器会把主线程卡住近 1 秒，
+    ///    淡出来不及播、母鸡晚一拍 —— 那是调试器的问题，哪种写法都一样，真实用户不会遇到（CLAUDE.md「首次打开」一节）
     private func setRoot(_ viewController: UIViewController, animated: Bool) {
         guard let window else { return }
-        guard animated else {
+        // 旧页面此刻的样子。afterScreenUpdates: false = 就要屏幕上现在这一帧，不等重画
+        guard animated, let oldScreen = window.snapshotView(afterScreenUpdates: false) else {
             window.rootViewController = viewController
             return
         }
-        UIView.transition(with: window, duration: 0.35, options: .transitionCrossDissolve) {
-            window.rootViewController = viewController
+        window.rootViewController = viewController
+        // 盖在新页面上面。淡出的这 0.35 秒里它也挡着点击 —— 同意按钮连点两次的问题照样挡得住
+        window.addSubview(oldScreen)
+        UIView.animate(withDuration: 0.35, animations: {
+            oldScreen.alpha = 0
+        }, completion: { _ in
+            oldScreen.removeFromSuperview()
+        })
+    }
+
+    /// 组装完之后挂哪一页。没同意就先见同意页，主界面这时候根本不在窗口上
+    private func showFirstPage(animated: Bool) {
+        if consent?.hasConsented == true {
+            enterApp(animated: animated)
+        } else {
+            showConsentPage(animated: animated)
         }
     }
 
     private func showConsentPage(animated: Bool) {
         setRoot(AIConsentViewController(onAgree: { [weak self] in self?.didAgree() }), animated: animated)
+        // 国行 iPhone 的「使用数据」弹窗趁这时候弹，别等到同意之后（见 NetworkAccessPrompt）。
+        // 撤回后回到这一页会再发一次 —— 系统只问一次，之后这个请求什么都不触发，无害
+        NetworkAccessPrompt.trigger()
+    }
+
+    /// 同意之后进 App：没看过示范先进示范，看过了直接上主界面。
+    ///
+    /// 示范走到一半 App 被杀、下次打开：同意还在、示范没记上 → 从这里重新进示范，从头走
+    private func enterApp(animated: Bool) {
+        guard let mainUI else { return }
+        if tutorial?.hasFinished == true {
+            setRoot(mainUI, animated: animated)
+        } else {
+            setRoot(TutorialAssembly.make(onFinish: { [weak self] in self?.finishTutorial() }),
+                    animated: animated)
+        }
+    }
+
+    /// 示范走完或被跳过。示范那一整套（假仓库、页面、导演）随着被换下窗口一起释放 ——
+    /// 示范里写的、孵的、删的，从来没进过数据库，这里不用清理任何东西
+    private func finishTutorial() {
+        tutorial?.markFinished()
+        if let mainUI {
+            setRoot(mainUI, animated: true)
+        }
     }
 
     private func didAgree() {
         consent?.grant()
-        if let mainUI {
-            setRoot(mainUI, animated: true)
-        }
+        enterApp(animated: true)
         // 冷启动那一轮被 sceneWillEnterForeground 的守卫跳过了（那时还没同意），现在补跑：
         // 欠的蛋孵上、关怀评估一次、向量补上
         openFlow?.enterForeground()
@@ -267,7 +347,8 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         // Use this method to save data, release shared resources, and store enough scene-specific state information
         // to restore the scene back to its current state.
 
-        // Save changes in the application's managed object context when the application transitions to the background.
+        // 保底存一次（正常没东西可存，见 saveContext）。库没打开时不碰它
+        guard CoreDataStack.shared.isLoaded else { return }
         CoreDataStack.shared.saveContext()
     }
 }

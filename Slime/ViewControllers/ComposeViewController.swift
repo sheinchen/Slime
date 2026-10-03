@@ -5,7 +5,8 @@
 //  写日记页:写一句碎碎念 → 点「收好」→ 母鸡上台,点头,说一句 → 收起。
 //  两种模式:输入模式(写字) / 记录模式(母鸡在台上)。VC 只做编排,
 //  存数据和「她说什么」交给 ViewModel、动画交给 RiveHenView。
-//  点「收好」那一刻日记就存了(先存后分析),所以这一页没有失败路径。
+//  点「收好」那一刻日记就存了(先存后分析)。唯一的失败路径就是这一下没存上(手机存储满了):
+//  停在输入页、字留在框里,弹一句「没存上」—— AI 那边的失败不算,她说一句本地的「收好了」。
 //
 
 import UIKit
@@ -22,7 +23,13 @@ final class ComposeViewController: UIViewController {
 
     
     var onClose: (() -> Void)?
-    
+
+    /// 示范教程用：一打开就把这段字一个一个打进输入框（不弹键盘），打完调 `onPresetTyped`。
+    /// 正式写日记时是 nil，什么都不发生
+    var presetText: String?
+    var onPresetTyped: (() -> Void)?
+    private var typingTask: Task<Void, Never>?
+
     init(viewModel: ComposeViewModel) {
         self.viewModel = viewModel
         super.init(nibName: nil, bundle: nil)
@@ -188,6 +195,30 @@ final class ComposeViewController: UIViewController {
             self.generateButton.alpha = 1
         }
 
+        if let presetText, typingTask == nil {
+            typePreset(presetText)
+        }
+    }
+
+    /// 示范：把预设那篇一个字一个字打出来，像有人在写。
+    ///
+    /// 输入框设成不可编辑 —— 不弹键盘（弹起来会把「收好」顶上去、盖住半个屏幕），
+    /// 也不让人点进去改字。用 Task 而不是 Timer：Task 跟着这个页面留在主线程上，
+    /// 里面直接改输入框不用操心线程；页面关掉时取消掉就停
+    private func typePreset(_ text: String) {
+        textView.isEditable = false
+        typingTask = Task { [weak self] in
+            // 先让卡片弹上来站稳，再开始打字
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            for character in text {
+                guard let self, !Task.isCancelled else { return }
+                self.textView.text.append(character)
+                self.placeholderLabel.isHidden = true
+                try? await Task.sleep(nanoseconds: 65_000_000)
+            }
+            guard !Task.isCancelled else { return }
+            self?.onPresetTyped?()
+        }
     }
 
     // MARK: - 搭建 UI
@@ -206,6 +237,8 @@ final class ComposeViewController: UIViewController {
         card.contentView.addSubview(textView)
         card.contentView.addSubview(placeholderLabel)
         view.addSubview(generateButton)
+        // 示范教程按这个名字找到「收好」
+        generateButton.accessibilityIdentifier = TutorialAnchor.composeSave.rawValue
         if let henView { view.addSubview(henView) }
         view.addSubview(replyLabel)
         view.addSubview(listeningHint)
@@ -281,6 +314,8 @@ final class ComposeViewController: UIViewController {
     override func viewDidDisappear(_ animated: Bool) {
         super.viewDidDisappear(animated)
         henView?.pauseRendering()
+        typingTask?.cancel()
+        typingTask = nil
     }
 
     // MARK: - 交互
@@ -303,21 +338,38 @@ final class ComposeViewController: UIViewController {
         let text = textView.text ?? ""
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
-
-    
+        // ① 先存。存不上就停在这里:字还在框里,母鸡不上台 ——
+        //    上了台再退下来,看着像存上了又反悔
+        let entry: SlimeItem
+        do {
+            entry = try viewModel.save(content: text)
+        } catch {
+            showSaveFailed()
+            return
+        }
 
         enterRecordingMode()
 
-        // Task:进入 async 世界,后台等 AI 结果(界面不卡,待机动画照播)
+        // ② Task:进入 async 世界,后台等 AI 结果(界面不卡,待机动画照播)
         Task {
             // 她至少要在台上待够这么久 —— 秒回的时候闪一下就没了,反而像出错
             let startedAt = DispatchTime.now()
             let minStageNanos: UInt64 = 800_000_000
-            // 不会失败:日记在问 AI 之前就存好了。AI 没读上,她说的是一句本地的「收好了」
-            let line = await viewModel.generate(content: text)
+            // 不会失败:日记上面已经存好了。AI 没读上,她说的是一句本地的「收好了」
+            let line = await viewModel.reply(to: entry)
             await waitAtLeast(minStageNanos, since: startedAt)
             acknowledge(reply: line)
         }
+    }
+
+    /// 没存上。说「可能」:空间不够是最常见的原因,但不是唯一的。
+    /// 字一个都没动 —— 清出空间回来再点「收好」就行
+    private func showSaveFailed() {
+        let alert = UIAlertController(title: "没存上",
+                                      message: "手机存储空间可能不够了。字还在，清理出一点空间再点「收好」试试。",
+                                      preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "好", style: .default))
+        present(alert, animated: true)
     }
 
     /// 「记下了」:她点一下头,点完再开口。

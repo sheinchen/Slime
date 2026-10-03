@@ -5,6 +5,7 @@
 
 import UIKit
 import SnapKit
+import SafariServices
 
 /// 「让母鸡读你的日记」同意页。**不同意就用不了 App**，所以它不是弹窗，是整个根页面 ——
 /// 没点同意之前，主界面根本不在窗口上，没有别的路能绕过去。
@@ -85,7 +86,10 @@ final class AIConsentViewController: UIViewController {
         view.addSubview(scrollView)
         scrollView.alwaysBounceVertical = true
         scrollView.snp.makeConstraints { make in
-            make.top.leading.trailing.equalToSuperview()
+            // 上沿贴安全区，不贴屏幕顶：这一页没有导航栏垫底，
+            // 贴屏幕顶的话往上滚时正文会从状态栏的时间、电量底下穿过去，两层字叠在一起（模拟器上撞到过）
+            make.top.equalTo(view.safeAreaLayoutGuide)
+            make.leading.trailing.equalToSuperview()
             make.bottom.equalTo(footer.snp.top)
         }
         let divider = UIView()
@@ -120,13 +124,17 @@ final class AIConsentViewController: UIViewController {
             ]),
 
             heading("发给谁"),
-            paragraph("先经过母鸡自己的中转服务器（部署在 Cloudflare 上，只转发、不保存内容），再交给 DeepSeek（深度求索）的 AI 模型处理。DeepSeek 的服务在中国境内，它怎么处理这些内容，以它的隐私政策为准。"),
+            // 「在中国境内」「可能用来改进模型」都出自 DeepSeek 自己的隐私政策（09-26 核对过）。
+            // 它的开放平台条款没说 API 的数据例外，所以按最保守的写 —— 宁可多告知，不能少告知
+            paragraph("先经过母鸡自己的中转服务器（部署在 Cloudflare 上，只转发、不保存内容），再交给 DeepSeek（深度求索）的 AI 模型处理。DeepSeek 在中国境内处理和存储这些内容，可能会保存它们、用来改进自己的模型。"),
 
             heading("留在手机上的"),
-            paragraph("日记、蛋和聊天记录都存在这台手机上。没有账号，母鸡也不会把它们上传到别处。只有用到上面那些功能时，相关的内容才会发出去。"),
+            paragraph("日记和蛋都存在这台手机上；和母鸡的聊天不保存，关掉聊天就没了。没有账号，母鸡也不会把它们上传到别处。只有用到上面那些功能时，相关的内容才会发出去。"),
 
             heading("随时可以撤回"),
             paragraph("首页右上角的设置里可以撤回。撤回之后母鸡不再发送任何内容；日记都还留在手机上，重新同意就能接着用。想彻底删掉，删除 App 就行。"),
+
+            privacyPolicyLink(),
         ])
         stack.axis = .vertical
         stack.alignment = .leading
@@ -199,7 +207,24 @@ final class AIConsentViewController: UIViewController {
         return stack
     }
 
+    /// 「阅读完整的隐私政策」。这一页讲的是摘要，全文在网页上 —— 同意之前得看得到全文。
+    private func privacyPolicyLink() -> UIButton {
+        let button = UIButton(type: .system)
+        button.setAttributedTitle(
+            AppFont.attributed("阅读完整的隐私政策 ›", size: 16, color: Palette.beak), for: .normal)
+        button.contentHorizontalAlignment = .leading
+        button.addTarget(self, action: #selector(openPrivacyPolicy), for: .touchUpInside)
+        return button
+    }
+
     // MARK: - 动作
+
+    /// App 内的 Safari 打开，看完点「完成」回到这一页接着决定
+    @objc private func openPrivacyPolicy() {
+        let safari = SFSafariViewController(url: AppLinks.privacyPolicy)
+        safari.preferredControlTintColor = Palette.beak
+        present(safari, animated: true)
+    }
 
     @objc private func agreeTapped() {
         // 只认第一下：换根页面有一段淡入淡出，这期间连点会让组合根收到两次同意

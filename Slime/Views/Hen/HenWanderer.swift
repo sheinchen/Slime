@@ -167,6 +167,10 @@ struct HenWanderer {
             : max(renderedFacing - step, facing)
     }
 
+    /// 她此刻的样子，**不推进时间**。
+    /// 给「帧循环还没转起来、但她已经要被画出来」的时候用 —— 见 `IslandView.layoutSubviews`。
+    var currentFrame: Frame { makeFrame() }
+
     /// 她现在面朝哪边（+1 右 / -1 左），跟画板原本的朝向无关。
     private var facingDirection: CGFloat { facing * config.authoredFacing }
 

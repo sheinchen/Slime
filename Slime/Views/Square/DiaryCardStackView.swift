@@ -29,6 +29,12 @@ final class DiaryCardStackView: UIView, UIGestureRecognizerDelegate {
     var onTopChange: ((Int) -> Void)?
     /// 编辑模式下点了卡片左上角的叉。真正删数据是 VC → VM 的事，这里只负责报上去
     var onDelete: ((SlimeItem) -> Void)?
+    /// 用户亲手抽走了一张。跟 `onTopChange` 不是一回事：那个装数据时也会报，这个只在手指抽卡时报
+    var onFlip: (() -> Void)?
+    /// 进出编辑模式（长按进、点别处出、换一天出、删光了出，所有路都报）
+    var onEditingChange: ((Bool) -> Void)?
+    /// 长按能不能进编辑模式。**正式 App 里一直是 true**；示范教程里只有教删除那两步打开
+    var allowsEditing = true
 
     /// 编辑模式：像桌面删 App —— 长按，卡片抖起来、左上角出叉，点叉删。
     /// 点卡片别处、换一天、这天删光了都会退出。编辑模式下照样能横拖翻卡，
@@ -275,6 +281,7 @@ final class DiaryCardStackView: UIView, UIGestureRecognizerDelegate {
         // 下一张早在拖动开始时就亮着垫在底下了，这里只是把它认作新的最上面那张
         placeCards()
         reportTop()
+        onFlip?()
 
         // 沿水平线滑出去，刚好出屏幕就够
         // （卡片离屏幕边还有 22 的缩进，多给 60 保证连影子一起出去）
@@ -317,10 +324,11 @@ extension DiaryCardStackView {
         isEditing = editing
         exitTap.isEnabled = editing
         cards.forEach { $0.setEditing(editing, animated: true) }
+        onEditingChange?(editing)
     }
 
     @objc fileprivate func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
-        guard gesture.state == .began, !isEditing, !cards.isEmpty else { return }
+        guard gesture.state == .began, allowsEditing, !isEditing, !cards.isEmpty else { return }
         // 桌面上长按进抖动模式也是这一下
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         setEditing(true)

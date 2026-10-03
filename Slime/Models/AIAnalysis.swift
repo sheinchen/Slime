@@ -8,6 +8,7 @@
 import Foundation
 
 struct AIAnalysis {
-    let emotion: SlimeEmotion
+    /// nil = 模型回了，但情绪词不在六类里。回复照样能用，只是这篇先不带情绪（跟没网时同一个处境）
+    let emotion: SlimeEmotion?
     let reply: String
 }

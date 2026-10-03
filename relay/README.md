@@ -62,6 +62,23 @@ printf %s "$(plutil -extract RelayDevToken raw ../Secrets.plist)" | npx wrangler
 | 类型检查 | `npm run check` |
 | **换 key**(泄露了、或者定期换) | DeepSeek 后台新建 key → 用上面那条 `secret put DEEPSEEK_API_KEY` 覆盖 → 删掉旧 key。**App 不用发新版** |
 | 换模型 | 改 `wrangler.jsonc` 的 `MODEL` → deploy。**App 不用发新版,但先跑 eval** |
+| 改隐私政策 | 改 [`public/privacy.html`](public/privacy.html) → deploy。**改了发给 AI 的东西或接收方,App 的同意页和 `AIConsent.currentVersion` 也要一起改** |
+| 改支持页 | 改 [`public/support.html`](public/support.html) → deploy。**改了 App 的交互(怎么写、怎么孵、怎么删),「常见问题」要跟着改** |
+
+## 隐私政策页 / 支持页
+
+同一个 Worker 顺带托管了两个静态页面,App Store Connect 里两个必填的网址都指向这里:
+
+| 页面 | 线上地址 | 谁在用 |
+|---|---|---|
+| [`public/privacy.html`](public/privacy.html) | `https://slime-relay.hen-diary-2026.workers.dev/privacy` | App 的设置页、同意页;ASC「隐私政策网址」 |
+| [`public/support.html`](public/support.html) | `https://slime-relay.hen-diary-2026.workers.dev/support` | ASC「支持网址」 |
+
+靠的是 `wrangler.jsonc` 里的 `assets`:请求先看 `public/` 里有没有对应的文件,**有就直接返回、不进 `src/index.ts`**,
+没有才轮到中转的逻辑。所以加页面没动 `index.ts` 一行,`/chat/completions` 照旧。
+
+本地看:`npm run dev` → 打开 `http://localhost:8787/privacy`、`/support`。
+开发者名字、联系邮箱两页都有(中英各一处),改的话一起改。
 
 ## 错误码
 

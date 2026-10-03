@@ -180,12 +180,12 @@ final class CoreDataCareMessageStore: CareMessageStore {
     
 
     
+    /// 存不上就撤回（见 `saveOrRollback`）。退场和新关怀是同一次保存，撤回时一起撤 —— 不会出现「旧的退了、新的没上」
     private func saveIfNeeded() {
-        guard context.hasChanges else { return }
         do {
-            try context.save()
+            try context.saveOrRollback()
         } catch {
-            print("待送出关心保存失败\(error)")
+            print("待送出关心保存失败，已撤回: \(error)")
         }
     }
     

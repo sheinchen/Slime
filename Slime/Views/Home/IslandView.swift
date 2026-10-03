@@ -65,8 +65,19 @@ final class IslandView: UIView {
     private var turnLength: TimeInterval = 0
     private var didFlipThisTurn = false
 
+    /// 点她那一下「缩一下」进行到第几秒。nil = 没在缩。
+    ///
+    /// **不能用 `CAKeyframeAnimation(keyPath: "transform.scale")`**（鸟巢可以，她不行）：
+    /// 她的 transform 每帧由 `place` 写，朝向镜像那一边时 scaleX 是负的。
+    /// Core Animation 要动 scale 那一项，得先把整个 transform 拆成「缩放 + 旋转」——
+    /// 而「左右镜像」会被拆成「三个轴都是 -1 的缩放 + 绕 x 轴转 180°」。
+    /// 动画再拿正数的缩放把那一项盖掉，剩下的就只有「绕 x 轴转 180°」= 她上下倒过来了。
+    /// 顺带：动画盖住 scale 的那 0.42 秒里，代码写的朝向和呼吸也全被吞掉，转身翻面会憋到动画完才跳过去。
+    /// 所以缩一下也走帧循环，作为一个系数乘进 `place` 的缩放里，跟朝向、呼吸、近大远小叠在一起。
+    private var dipElapsed: TimeInterval?
+    private static let dipDuration: TimeInterval = 0.42
+
     var onNestTap: (() -> Void)?
-    var onHenTap: (() -> Void)?
 
     // MARK: -
 
@@ -96,6 +107,8 @@ final class IslandView: UIView {
         hen?.isUserInteractionEnabled = false
 
         nestButton.addTarget(self, action: #selector(nestTapped), for: .touchUpInside)
+        // 示范教程按这个名字找到鸟巢、在蒙层上给它开洞
+        nestButton.accessibilityIdentifier = TutorialAnchor.nest.rawValue
         addSubview(nestButton)
         
         let tap = UITapGestureRecognizer(target: self, action: #selector(islandTapped))
@@ -133,6 +146,15 @@ final class IslandView: UIView {
         hen?.bounds = CGRect(origin: .zero, size: henSize)
 
         CATransaction.commit()
+
+        // 一有尺寸就把她放到落脚点上，**不等帧循环**。
+        //
+        // 以前她的 position 只在 tick 里写，而帧循环第一下只记时间戳、第二下才真的摆她。
+        // 这之前她停在 (0, 0) —— 锚点在脚底，也就是整只鸡画在岛的左上角**外面**。
+        // 平时这只有一两帧；可第一次打开时 Rive 画第一帧要等着色器编译（模拟器上实测 1.1 秒），
+        // 等完画出来的第一帧就是「在岛外面」，下一帧才跳回来 —— 看着就是从外面卡住、再飞进来。
+        // 这里用的是她现在的样子（不推进时间），跟之后 tick 摆的位置接得上，不会跳。
+        if let hen { place(hen, at: wanderer.currentFrame) }
     }
 
     // MARK: - 呼吸
@@ -222,7 +244,13 @@ final class IslandView: UIView {
             break
         }
         advanceTurn(dt: dt, hen: hen)
+        advanceDip(dt: dt)
+        place(hen, at: frame)
+    }
 
+    /// 把一帧「她长什么样」落到图层上：位置、缩放、在巢前还是巢后。
+    /// tick 每帧调；layoutSubviews 在帧循环转起来之前先调一次，免得她第一帧停在 (0, 0)。
+    private func place(_ hen: RiveHenView, at frame: HenWanderer.Frame) {
         let feet = point(for: frame.position)
         // 近大远小。等距视角下幅度必须很小，夸张了反而假。
         let depth = 0.93 + 0.12 * ((frame.position.y + 1) / 2)
@@ -231,8 +259,9 @@ final class IslandView: UIView {
         CATransaction.setDisableActions(true)
         hen.layer.position = CGPoint(x: feet.x - driftComp(facing: frame.facing, depth: depth),
                                      y: feet.y + frame.lift)
-        hen.transform = CGAffineTransform(scaleX: frame.scaleX * depth,
-                                          y: frame.scaleY * depth)
+        let dip = dipScale
+        hen.transform = CGAffineTransform(scaleX: frame.scaleX * depth * dip,
+                                          y: frame.scaleY * depth * dip)
         CATransaction.commit()
 
         updateHenDepthOrder(feetY: feet.y)
@@ -297,6 +326,28 @@ final class IslandView: UIView {
         }
     }
 
+    // MARK: - 点她缩一下
+
+    private func advanceDip(dt: TimeInterval) {
+        guard var elapsed = dipElapsed else { return }
+        elapsed += dt
+        dipElapsed = elapsed < Self.dipDuration ? elapsed : nil
+    }
+
+    /// 缩一下的系数，1 = 原样。跟原来那段关键帧一样：1 → 0.94 → 1.03 → 1，
+    /// 整段 ease-in-ease-out，关键帧之间线性插值。
+    private var dipScale: CGFloat {
+        guard let elapsed = dipElapsed else { return 1 }
+        let values: [CGFloat] = [1, 0.94, 1.03, 1]
+        let times: [CGFloat] = [0, 0.28, 0.66, 1]
+        let t = smoothstep(0, 1, CGFloat(elapsed / Self.dipDuration))
+        for i in 1..<times.count where t <= times[i] {
+            let local = (t - times[i - 1]) / (times[i] - times[i - 1])
+            return values[i - 1] + (values[i] - values[i - 1]) * local
+        }
+        return 1
+    }
+
     /// 单位圆坐标 → 岛上的落脚点。
     private func point(for unit: CGPoint) -> CGPoint {
         CGPoint(x: bounds.width * (walkCenter.x + unit.x * walkRadius.width),
@@ -338,13 +389,10 @@ final class IslandView: UIView {
         guard !nestButton.frame.contains(p) else { return }
         guard hen.frame.insetBy(dx: -10, dy: -10).contains(p) else { return }
         
-        onHenTap?()
-        
-        let dip = CAKeyframeAnimation(keyPath: "transform.scale")
-        dip.values = [1, 0.94, 1.03, 1]
-        dip.keyTimes = [0, 0.28, 0.66, 1]
-        dip.duration = 0.42
-        dip.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
-        hen.layer.add(dip, forKey: "dip")
+        // 点母鸡只轻震 + 缩一下作回应，不再打开聊天 —— 聊天入口只剩 tab 条右边那个圆（10-02）
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
+
+        // 连着点就从头再缩一次（跟原来 add 同一个 key 会顶掉上一段是一样的效果）
+        dipElapsed = 0
     }
 }

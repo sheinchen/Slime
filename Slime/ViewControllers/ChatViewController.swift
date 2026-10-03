@@ -97,6 +97,8 @@ final class ChatViewController: UIViewController {
         }
     }
     private var showsRetry = false
+    /// 正在进行的这一轮（检索 + 回复）。页面关掉时取消它，见 viewDidDisappear。
+    private var roundTask: Task<Void, Never>?
     private var lastStreamRenderAt: CFTimeInterval = 0
     private var didPlayEntrance = false
 
@@ -141,6 +143,10 @@ final class ChatViewController: UIViewController {
         super.viewDidDisappear(animated)
         henStage.stopBreathing()
         henStage.stopTalking()
+        // 页面被关掉（不是被别的页面盖住）→ 这一轮作废：检索、流式请求都停。
+        // 聊天不存库（10-03）之后，关页面这段对话本来就整个扔掉了，这里管的是别再白发请求、白花钱
+        // 不写在 closeTapped 里：以后不管从哪条路关掉，都不用记得来这里取消
+        if isBeingDismissed { roundTask?.cancel() }
     }
 
     override func viewDidLayoutSubviews() {
@@ -342,16 +348,18 @@ final class ChatViewController: UIViewController {
         inputPlaceholder.isHidden = false
         updateInputHeight()
 
-        Task {
+        // 先记下来 —— 下面 requestRound 开头那次 applySnapshot 就会把它画出来，不用等检索
+        do { try viewModel.addUserMessage(text) } catch { return }
+        roundTask = Task {
             await requestRound {
-                try await self.viewModel.send(text, onDelta: { self.onStreamDelta() })
+                try await self.viewModel.reply(onDelta: { self.onStreamDelta() })
             }
         }
     }
 
     private func retryTapped() {
         guard !isWaitingReply else { return }
-        Task {
+        roundTask = Task {
             await requestRound {
                 try await self.viewModel.retry(onDelta: { self.onStreamDelta() })
             }
@@ -369,8 +377,11 @@ final class ChatViewController: UIViewController {
             _ = try await round()
             showsRetry = false
         } catch {
-            print("聊天请求失败 \(error)")
-            showsRetry = true
+            // 页面关了导致的取消不是失败：不打日志、不挂重试提示
+            if !Task.isCancelled {
+                print("聊天请求失败 \(error)")
+                showsRetry = true
+            }
         }
 
         henStage.stopTalking()

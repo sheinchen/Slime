@@ -50,6 +50,8 @@ final class FloatingTabBar: UIView {
             let button = UIButton(type: .custom)
             button.setImage(UIImage(systemName: name, withConfiguration: Self.iconConfig), for: .normal)
             button.tag = index
+            // 「tab.1」= 日历，示范教程按这个名字找到它（TutorialAnchor.calendarTab）
+            button.accessibilityIdentifier = "tab.\(index)"
             button.addTarget(self, action: #selector(itemTapped), for: .touchUpInside)
             button.snp.makeConstraints { make in
                 make.width.equalTo(Self.itemWidth)

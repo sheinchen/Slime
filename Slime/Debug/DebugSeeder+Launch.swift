@@ -19,6 +19,7 @@ extension DebugSeeder {
         case .thin:     seedThin()
         case .diaries:  seedDiaries()
         case .legacy:   reset(to: [.sad, .sad, .tired, .sad, .sad], withEggs: true)
+        case .showcase: seedShowcase()
         case .careTurn: hatchNow(daysAgo: 1, emotion: .happy,
                                  text: "过了！晚上和朋友吃了顿好的")
         case .careFlat: hatchNow(daysAgo: 2, emotion: .calm,

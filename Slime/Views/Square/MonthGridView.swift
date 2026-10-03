@@ -21,8 +21,13 @@ final class MonthGridView: UIView {
     var onSelect: ((SquareViewModel.Day) -> Void)?
     /// 翻到第几个月（下标对应 SquareViewModel.months）。只在真的换页时回调一次。
     var onMonthChange: ((Int) -> Void)?
+    /// 用户**亲手**滑到了另一个月，而且松手停稳了。区别同周条的 `onSwipedWeek`：
+    /// 拖到一半、代码跳页都不算。示范教程靠它认「翻月学会了」
+    var onSwipedMonth: ((Int) -> Void)?
 
     private(set) var currentIndex = 0
+    /// 这次拖动开始时停在哪个月
+    private var dragStartIndex: Int?
 
     /// 内部那个横向分页 scrollView 的拖动手势。
     /// 外面要让自己的竖向手势和它互斥时用（见 SquareViewController 的下拉展开）。
@@ -212,6 +217,25 @@ extension MonthGridView: UICollectionViewDelegate {
 
         currentIndex = index
         onMonthChange?(index)
+    }
+
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        dragStartIndex = currentIndex
+    }
+
+    /// 同周条：没有惯性就不会有 didEndDecelerating，在这里收尾
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        if !decelerate { reportSwipeIfNeeded() }
+    }
+
+    func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+        reportSwipeIfNeeded()
+    }
+
+    private func reportSwipeIfNeeded() {
+        guard let start = dragStartIndex else { return }
+        dragStartIndex = nil
+        if currentIndex != start { onSwipedMonth?(currentIndex) }
     }
 }
 

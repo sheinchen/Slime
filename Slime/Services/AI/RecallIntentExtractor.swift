@@ -42,7 +42,7 @@ final class RecallIntentExtractor: RecallIntentExtracting {
 
         return RecallIntent(shouldRecall: parsed.shouldRecall && !keywords.isEmpty,
                             keywords: Array(keywords),
-                            emotion: parsed.emotion.flatMap { SlimeEmotion(rawValue: $0) },
+                            emotion: parsed.emotion.flatMap { SlimeEmotion(aiOutput: $0) },
                             raw: raw)
     }
 

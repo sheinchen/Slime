@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<!--
+  母鸡日记的隐私政策。由中转 Worker 顺带托管(见 wrangler.jsonc 的 assets),
+  线上地址 https://slime-relay.hen-diary-2026.workers.dev/privacy ——
+  App 里设置页、同意页的链接和 App Store Connect 里填的都是这个。
+
+  ⚠️ 这一页是对用户的承诺,**跟代码不一致就是在骗人**。改了发给 AI 的内容、换了接收方,
+     这里、App 的同意页(AIConsentViewController)、AIConsent.currentVersion 三处一起改。
+  开发者名字、联系邮箱在「1. 开发者」,中英各一处;支持页(support.html)里也有,改的话一起改。
+-->
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>隐私政策 · 母鸡日记</title>
+<meta name="description" content="母鸡日记隐私政策 / Hen Diary Privacy Policy">
+<style>
+  :root {
+    --bg: #FEFCF4;
+    --card: #FFFEFA;
+    --ink: #4A3D2E;
+    --ink-soft: rgba(74, 61, 46, 0.72);
+    --ink-faint: rgba(74, 61, 46, 0.45);
+    --line: rgba(74, 61, 46, 0.12);
+    --accent: #D9772E;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #1E1A15;
+      --card: #28231C;
+      --ink: #F1E8D8;
+      --ink-soft: rgba(241, 232, 216, 0.75);
+      --ink-faint: rgba(241, 232, 216, 0.5);
+      --line: rgba(241, 232, 216, 0.14);
+      --accent: #F0A060;
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB",
+                 "Noto Sans SC", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+    line-height: 1.75;
+  }
+  main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: max(28px, env(safe-area-inset-top)) 20px max(48px, env(safe-area-inset-bottom));
+  }
+  nav { font-size: 14px; color: var(--ink-faint); margin-bottom: 20px; }
+  nav a { color: var(--accent); text-decoration: none; }
+  h1 { font-size: 28px; line-height: 1.3; margin: 0 0 6px; letter-spacing: 0.02em; }
+  .date { color: var(--ink-faint); font-size: 14px; margin: 0 0 24px; }
+  h2 {
+    font-size: 19px; line-height: 1.4; margin: 36px 0 10px;
+    padding-top: 20px; border-top: 1px solid var(--line);
+  }
+  h3 { font-size: 16px; margin: 20px 0 6px; }
+  p, li { color: var(--ink-soft); }
+  p { margin: 0 0 12px; }
+  ul { margin: 0 0 12px; padding-left: 1.2em; }
+  li { margin: 4px 0; }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--accent); }
+  .summary {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 16px 18px 6px;
+    margin-bottom: 8px;
+  }
+  .summary li { margin: 6px 0; }
+  .lang-divider { margin-top: 64px; }
+</style>
+</head>
+<body>
+<main>
+
+<nav><a href="#zh">中文</a> · <a href="#en">English</a></nav>
+
+<!-- ============================== 中文 ============================== -->
+<article id="zh" lang="zh-Hans">
+
+<h1>母鸡日记 隐私政策</h1>
+<p class="date">更新日期：2026 年 10 月 3 日</p>
+
+<div class="summary">
+  <ul>
+    <li>你的日记和蛋<strong>存在你自己的手机上</strong>；和母鸡的聊天<strong>不保存</strong>，关掉聊天就没了。没有账号，我的服务器上没有你的日记。</li>
+    <li>只有在<strong>你同意之后</strong>、用到 AI 功能时，相关内容才会经过中转服务器，发给 DeepSeek 的 AI 模型。</li>
+    <li>中转服务器<strong>只转发、不保存</strong>内容。DeepSeek 在<strong>中国境内</strong>处理这些内容，可能会保存它们、用来改进自己的模型。</li>
+    <li>没有广告，不做跨 App 追踪，不出售任何数据。</li>
+  </ul>
+</div>
+
+<h2>1. 开发者</h2>
+<p>「母鸡日记」由我（陈诗莹）个人开发和运营。关于隐私的任何问题，请写信到 <a href="mailto:chenshiying2002@163.com">chenshiying2002@163.com</a>。</p>
+
+<h2>2. 存在你手机上的数据</h2>
+<p>你写的日记，以及 App 根据日记生成的内容（每天的蛋、母鸡的回复和关心），都只存在这台设备上。我看不到，也拿不到。</p>
+<p>和母鸡的聊天<strong>哪里都不保存</strong>：只在你聊的时候留在内存里，关掉聊天页就没了，下次打开是新的对话。</p>
+<p>如果你开启了 iCloud 云备份，iOS 会按你的设置把这些数据包含在设备备份里，这由 Apple 处理。</p>
+
+<h2>3. 会发出去的数据</h2>
+<p>第一次打开 App 时，你会看到一页说明。<strong>点了「同意」之后</strong>，在你用到 AI 功能时（母鸡回你一句、把一天孵成蛋、主动关心你、和母鸡聊天），相关内容才会发出去，包括：</p>
+<ul>
+  <li>日记的正文和写下的时间；</li>
+  <li>已经生成的内容：读出的情绪、每天的总结、母鸡对你说过的话；</li>
+  <li>你和母鸡的聊天，以及为了接上话附上的相关旧日记。</li>
+</ul>
+<p>每次请求还会带上一个随机生成的安装 ID 和你的 IP 地址，<strong>只用于防止滥用</strong>。安装 ID 跟你的身份、设备、Apple 账号都没有关联，删除 App 再装会换一个新的。</p>
+<p>App <strong>不会</strong>发送或收集你的姓名、联系方式、通讯录、位置、照片、广告标识符 —— 除非你自己把它写进了日记或聊天里。</p>
+
+<h2>4. 谁会处理这些数据</h2>
+<h3>中转服务器（运行在 Cloudflare 上）</h3>
+<p>负责把请求转给 DeepSeek，<strong>不保存</strong>日记和聊天的内容。Cloudflare 会按<a href="https://www.cloudflare.com/privacypolicy/">它的隐私政策</a>处理网络层面的信息（比如 IP 地址），它的机房分布在全球各地。</p>
+<h3>DeepSeek（深度求索）</h3>
+<p>负责读这些内容、生成母鸡的回复。按 <a href="https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html">DeepSeek 的隐私政策</a>，它在<strong>中华人民共和国境内</strong>收集、处理和存储数据，并且可能用这些数据训练和改进它的模型。也就是说，你写的内容会被传输到中国境内。DeepSeek 保存多久、怎么使用，以它的政策为准，我无法替你删除已经发给 DeepSeek 的内容。</p>
+<h3>除此之外</h3>
+<p>没有其他人。我不出售数据，不把数据用于广告，也不做跨 App 追踪。</p>
+
+<h2>5. 保存多久</h2>
+<ul>
+  <li><strong>你的手机上</strong>：日记和蛋一直保存，直到你删掉某篇日记，或者删除 App。聊天不保存，关掉聊天页就没了。</li>
+  <li><strong>中转服务器</strong>：不保存内容。</li>
+  <li><strong>DeepSeek</strong>：按 DeepSeek 的政策。</li>
+</ul>
+
+<h2>6. 你可以做什么</h2>
+<ul>
+  <li><strong>撤回同意</strong>：首页右上角的齿轮 → 设置 → 撤回 AI 授权。撤回之后 App 不再发送任何内容；在此之前已经发出去的不受影响。重新同意就能接着用。</li>
+  <li><strong>删除单篇日记</strong>：在日历页找到那篇日记删除。</li>
+  <li><strong>删除全部数据</strong>：删除 App，手机上的所有数据会一起清除。</li>
+  <li>我的服务器上没有你的日记，所以没有东西可以替你导出或删除。如果你所在地区的法律赋予你其他权利（例如欧盟的 GDPR），或者有任何疑问，请联系我。</li>
+</ul>
+
+<h2>7. 安全</h2>
+<p>所有联网传输都使用 HTTPS 加密。手机上的数据受 iOS 的数据保护机制保护。</p>
+
+<h2>8. 儿童</h2>
+<p>母鸡日记不面向 13 岁以下的儿童，我也不会有意收集儿童的个人信息。</p>
+
+<h2>9. 政策变更</h2>
+<p>如果发出去的数据或接收方有变化，我会更新这一页，而且 App 会在你下次打开时<strong>重新请你同意</strong>，不会在你不知情的情况下改变。</p>
+
+</article>
+
+<!-- ============================== English ============================== -->
+<article id="en" lang="en" class="lang-divider">
+
+<h1>Hen Diary Privacy Policy</h1>
+<p class="date">Last updated: October 3, 2026</p>
+
+<div class="summary">
+  <ul>
+    <li>Your diary entries and eggs <strong>stay on your own device</strong>; chats with the hen are <strong>not saved</strong> and are gone once you close the chat. There are no accounts, and your diary is not on my servers.</li>
+    <li>Only <strong>after you agree</strong>, and only when you use an AI feature, is the relevant content sent through a relay server to DeepSeek's AI model.</li>
+    <li>The relay server <strong>forwards without storing</strong> any content. DeepSeek processes the content <strong>in China</strong> and may retain it and use it to improve its models.</li>
+    <li>No ads, no cross-app tracking, and no data is ever sold.</li>
+  </ul>
+</div>
+
+<h2>1. Developer</h2>
+<p>Hen Diary (母鸡日记) is developed and operated by me, Shiying Chen (陈诗莹), as an independent developer. For any privacy question, email <a href="mailto:chenshiying2002@163.com">chenshiying2002@163.com</a>.</p>
+
+<h2>2. Data stored on your device</h2>
+<p>Your diary entries, and everything the app creates from them (daily eggs, the hen's replies and check-ins), stay only on this device. I cannot see or access them.</p>
+<p>Chats with the hen are <strong>not saved anywhere</strong>: they live in memory only while you are chatting, are gone when you close the chat screen, and the next chat starts fresh.</p>
+<p>If iCloud Backup is turned on, iOS includes this data in your device backup according to your settings. That is handled by Apple.</p>
+
+<h2>3. Data that is sent</h2>
+<p>The first time you open the app, you see an explanation page. <strong>Only after you tap "Agree"</strong>, and only when you use an AI feature (the hen replying to an entry, hatching a day into an egg, checking in on you, chatting with the hen), is the relevant content sent, including:</p>
+<ul>
+  <li>the text of your entries and when you wrote them;</li>
+  <li>content already generated: moods, daily summaries, and what the hen has said to you;</li>
+  <li>your chats with the hen, plus related past entries included to follow the conversation.</li>
+</ul>
+<p>Each request also carries a randomly generated install ID and your IP address, <strong>used only to prevent abuse</strong>. The install ID is not linked to your identity, your device or your Apple Account, and it changes if you delete and reinstall the app.</p>
+<p>The app does <strong>not</strong> send or collect your name, contact details, contacts, location, photos or advertising identifier — unless you write them into a diary entry or a chat yourself.</p>
+
+<h2>4. Who processes this data</h2>
+<h3>Relay server (running on Cloudflare)</h3>
+<p>It forwards requests to DeepSeek and <strong>does not store</strong> the content of your entries or chats. Cloudflare processes network-level information (such as IP addresses) under <a href="https://www.cloudflare.com/privacypolicy/">its privacy policy</a>, in data centers around the world.</p>
+<h3>DeepSeek</h3>
+<p>It reads the content and generates the hen's replies. According to <a href="https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html">DeepSeek's privacy policy</a>, it collects, processes and stores data <strong>in the People's Republic of China</strong>, and may use data to train and improve its models. This means the content you write is transferred to China. How long DeepSeek keeps the data and how it uses it are governed by its policy; I cannot delete content that has already been sent to DeepSeek.</p>
+<h3>No one else</h3>
+<p>I do not sell data, use it for advertising, or track you across apps.</p>
+
+<h2>5. Retention</h2>
+<ul>
+  <li><strong>On your device</strong>: entries and eggs are kept until you delete an entry or delete the app. Chats are not saved; they are gone when you close the chat screen.</li>
+  <li><strong>Relay server</strong>: no content is stored.</li>
+  <li><strong>DeepSeek</strong>: according to DeepSeek's policy.</li>
+</ul>
+
+<h2>6. Your choices</h2>
+<ul>
+  <li><strong>Withdraw consent</strong>: tap the gear on the home screen → Settings → Withdraw AI consent (撤回 AI 授权). After that the app sends nothing; content sent before is not affected. Agree again at any time to keep using it.</li>
+  <li><strong>Delete an entry</strong>: find it on the calendar page and delete it.</li>
+  <li><strong>Delete everything</strong>: delete the app, and all data on the device is removed.</li>
+  <li>Since your diary is not on my servers, there is nothing I can export or delete for you. If the law where you live gives you additional rights (for example, the EU GDPR), or if you have any questions, please contact me.</li>
+</ul>
+
+<h2>7. Security</h2>
+<p>All network traffic is encrypted with HTTPS. Data on your device is protected by iOS Data Protection.</p>
+
+<h2>8. Children</h2>
+<p>Hen Diary is not directed at children under 13, and I do not knowingly collect personal information from children.</p>
+
+<h2>9. Changes</h2>
+<p>If the data that is sent, or who receives it, changes, I will update this page, and the app will <strong>ask for your consent again</strong> the next time you open it. Nothing changes without you knowing.</p>
+
+</article>
+
+</main>
+</body>
+</html>

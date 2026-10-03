@@ -30,6 +30,10 @@ enum AIError: Error {
     case emptyContent
     /// 用户还没同意把内容交给 AI（或者撤回了）。请求**根本没发出去**，见 AIClient.makeRequest
     case notAllowed
+    /// 流断在半路：连接关了，或者上游说自己没说完（finish_reason 不是 stop）。收到的那半句不能当回复
+    case incompleteStream
+    /// 回了，但内容不能用（比如情绪不在六类里）。按没回处理，别兜一个默认值存进去
+    case invalidContent
 }
 
 protocol AIService {

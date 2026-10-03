@@ -115,6 +115,10 @@ class NestStageView: UIView {
         
         // UIImageView 默认不吃触摸，不开这个手势收不到事件
         imageView.isUserInteractionEnabled = true
+
+        // 示范教程按这两个名字找到「母鸡」和「整块舞台（蛋 + 下面那行字）」
+        imageView.accessibilityIdentifier = TutorialAnchor.squareHen.rawValue
+        accessibilityIdentifier = TutorialAnchor.nestStage.rawValue
         
         // minimumPressDuration = 0：手指一落就进 .began，蓄力从第 0 毫秒开始算。
         // 用默认的 0.5 秒的话，前半秒完全没反馈，按下去像坏了。
